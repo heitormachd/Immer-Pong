@@ -1,0 +1,9 @@
+/data/
+/ping-pong
+/.ping-pong.new
+/build/
+/dist/
+/*.spec
+__pycache__/
+*.pyc
+.venv/
