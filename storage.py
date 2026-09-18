@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from tournaments import SYSTEMS, tournament_state
+from live_scoring import live_state
 
 
 class StoreError(Exception):
@@ -20,7 +21,8 @@ class StoreError(Exception):
 class Store:
     PLAYER_FIELDS = ('id', 'name', 'active')
     LEGACY_MATCH_FIELDS = ('id', 'timestamp', 'player1', 'player2', 'score1', 'score2')
-    MATCH_FIELDS = (*LEGACY_MATCH_FIELDS, 'tournament_id', 'fixture_id')
+    TOURNAMENT_MATCH_FIELDS = (*LEGACY_MATCH_FIELDS, 'tournament_id', 'fixture_id')
+    MATCH_FIELDS = (*TOURNAMENT_MATCH_FIELDS, 'target_points', 'point_log', 'status', 'revision')
     TOURNAMENT_FIELDS = ('id', 'name', 'system', 'created_at', 'players', 'groups')
 
     def __init__(self, directory):
@@ -44,7 +46,8 @@ class Store:
         try:
             with (self.directory / name).open(newline='', encoding='utf-8') as handle:
                 reader = csv.DictReader(handle, strict=True)
-                legacy = name == 'matches.csv' and reader.fieldnames == list(self.LEGACY_MATCH_FIELDS)
+                legacy = name == 'matches.csv' and reader.fieldnames in (
+                    list(self.LEGACY_MATCH_FIELDS), list(self.TOURNAMENT_MATCH_FIELDS))
                 if reader.fieldnames != list(fields) and not legacy:
                     raise ValueError(f'Unexpected columns in {name}')
                 rows = list(reader)
@@ -53,7 +56,9 @@ class Store:
                     raise ValueError(f'Incomplete row in {name}')
                 if legacy:
                     for row in rows:
-                        row.update(tournament_id='', fixture_id='')
+                        row.setdefault('tournament_id', '')
+                        row.setdefault('fixture_id', '')
+                        row.update(target_points='', point_log='[]', status='completed', revision='0')
                 return rows
         except FileNotFoundError:
             return []
@@ -102,8 +107,25 @@ class Store:
                     raise ValueError('Match references a missing player')
                 match['score1'] = int(match['score1'])
                 match['score2'] = int(match['score2'])
-                self._validate_match(match['player1'], match['player2'],
-                                     match['score1'], match['score2'])
+                match['target_points'] = int(match['target_points']) if match['target_points'] else None
+                match['point_log'] = json.loads(match['point_log'])
+                match['revision'] = int(match['revision'])
+                if match['target_points'] is None:
+                    if match['point_log'] != [] or match['status'] != 'completed' or match['revision'] != 0:
+                        raise ValueError('Invalid final-score match metadata')
+                    self._validate_match(match['player1'], match['player2'],
+                                         match['score1'], match['score2'])
+                else:
+                    state = live_state(match)
+                    status = 'completed' if state['winner'] else 'in_progress'
+                    if (match['status'] != status or match['tournament_id'] or match['fixture_id']
+                            or match['revision'] < len(match['point_log'])
+                            or (match['score1'], match['score2']) != (state['score1'], state['score2'])):
+                        raise ValueError('Live match does not agree with its point log')
+                    for event in match['point_log']:
+                        point_time = datetime.fromisoformat(event['timestamp'])
+                        if point_time.utcoffset() is None or point_time.utcoffset().total_seconds() != 0:
+                            raise ValueError('Point timestamps must be UTC')
                 if (bool(match['tournament_id']) != bool(match['fixture_id'])
                         or match['tournament_id'] and match['tournament_id'] not in tournament_ids):
                     raise ValueError('Match references a missing tournament or fixture')
@@ -139,6 +161,8 @@ class Store:
                         serialized['active'] = int(serialized['active'])
                     if 'players' in serialized:
                         serialized['players'] = json.dumps(serialized['players'])
+                    if 'point_log' in serialized:
+                        serialized['point_log'] = json.dumps(serialized['point_log'])
                     writer.writerow(serialized)
                 handle.flush()
                 os.fsync(handle.fileno())
@@ -191,7 +215,8 @@ class Store:
             matches.append(dict(id=uuid.uuid4().hex,
                                 timestamp=datetime.now(timezone.utc).isoformat(),
                                 player1=player1, player2=player2,
-                                score1=score1, score2=score2, tournament_id='', fixture_id=''))
+                                score1=score1, score2=score2, tournament_id='', fixture_id='',
+                                target_points=None, point_log=[], status='completed', revision=0))
             self._write('matches.csv', self.MATCH_FIELDS, matches)
             return players, matches, tournaments
 
@@ -262,8 +287,56 @@ class Store:
                                 timestamp=datetime.now(timezone.utc).isoformat(),
                                 player1=fixture['player1'], player2=fixture['player2'],
                                 score1=score1, score2=score2,
-                                tournament_id=tournament_id, fixture_id=fixture_id))
+                                tournament_id=tournament_id, fixture_id=fixture_id,
+                                target_points=None, point_log=[], status='completed', revision=0))
             # The result is the only persisted change. Brackets and completion are
             # derived from it, so a crash cannot leave two tables half-updated.
+            self._write('matches.csv', self.MATCH_FIELDS, matches)
+            return players, matches, tournaments
+
+    def create_live_match(self, player1, player2, target_points):
+        if player1 == player2:
+            raise StoreError('Choose two different players.')
+        if type(target_points) is not int or target_points < 2:
+            raise StoreError('Choose a target of at least 2 points.')
+        with self._locked():
+            players, matches, tournaments = self._load()
+            if any(not self._player(players, p)['active'] for p in (player1, player2)):
+                raise StoreError('Only active players can start a new match.')
+            matches.append(dict(id=uuid.uuid4().hex, timestamp=datetime.now(timezone.utc).isoformat(),
+                                player1=player1, player2=player2, score1=0, score2=0,
+                                tournament_id='', fixture_id='', target_points=target_points,
+                                point_log=[], status='in_progress', revision=0))
+            self._write('matches.csv', self.MATCH_FIELDS, matches)
+            return players, matches, tournaments
+
+    def score_live_match(self, match_id, player_id, expected_revision):
+        """Add a point, or undo the last point when player_id is None."""
+        with self._locked():
+            players, matches, tournaments = self._load()
+            match = next((m for m in matches if m['id'] == match_id), None)
+            if match is None or match['target_points'] is None:
+                raise StoreError('Live match not found. Refresh and try again.')
+            if match['revision'] != expected_revision:
+                raise StoreError('This match changed on another computer. Refresh before scoring again.')
+            if player_id is None:
+                if not match['point_log']:
+                    raise StoreError('There are no points to undo.')
+                match['point_log'].pop()
+            else:
+                if match['status'] == 'completed':
+                    raise StoreError('This match already has a winner.')
+                if player_id not in (match['player1'], match['player2']):
+                    raise StoreError('The scorer is not playing in this match.')
+                match['point_log'].append(dict(player=player_id, timestamp=datetime.now(timezone.utc).isoformat()))
+            state = live_state(match)
+            match['score1'], match['score2'] = state['score1'], state['score2']
+            match['revision'] += 1
+            match['status'] = 'completed' if state['winner'] else 'in_progress'
+            if state['winner']:
+                # Elo follows completion order, not the order live matches began.
+                match['timestamp'] = datetime.now(timezone.utc).isoformat()
+                matches.remove(match)
+                matches.append(match)
             self._write('matches.csv', self.MATCH_FIELDS, matches)
             return players, matches, tournaments

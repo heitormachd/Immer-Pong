@@ -5,15 +5,17 @@ from datetime import datetime
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QApplication, QAbstractItemView, QComboBox, QHBoxLayout, QHeaderView,
     QInputDialog, QLabel, QMainWindow, QMessageBox, QPushButton, QSpinBox,
     QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
 )
 
-from ranking import standings
+from ranking import standings, match_elo_history
 from storage import Store
 from tournament_ui import TournamentTab
+from live_ui import LiveMatchPanel, show_point_history
 
 
 def data_directory():
@@ -72,6 +74,7 @@ class Window(QMainWindow):
         super().__init__()
         self.store = store if store is not None else Store(data_directory())
         self.players = []
+        self.completed_matches = []
         self.name_drafts = {}
         self.worker = None
         self.setWindowTitle('Ping-pong')
@@ -104,7 +107,12 @@ class Window(QMainWindow):
 
     def _matches_tab(self):
         layout = self._tab('Matches')
-        form = QHBoxLayout()
+        self.match_mode = QComboBox()
+        self.match_mode.addItems(['Final result', 'Live scoring'])
+        layout.addWidget(self.match_mode)
+        final_entry = QWidget()
+        form = QHBoxLayout(final_entry)
+        form.setContentsMargins(0, 0, 0, 0)
         self.player1, self.player2 = QComboBox(), QComboBox()
         self.score1, self.score2 = QSpinBox(), QSpinBox()
         for score in (self.score1, self.score2):
@@ -118,12 +126,24 @@ class Window(QMainWindow):
         self.register_button = QPushButton('Register')
         self.register_button.clicked.connect(self.register)
         form.addWidget(self.register_button)
-        layout.addLayout(form)
-        self.history = table(['Time', 'Player 1', 'Points', 'Player 2', 'Tournament'])
+        layout.addWidget(final_entry)
+        self.live_view = LiveMatchPanel(self)
+        layout.addWidget(self.live_view)
+        self.live_view.hide()
+        self.match_mode.currentIndexChanged.connect(lambda index: final_entry.setVisible(index == 0))
+        self.match_mode.currentIndexChanged.connect(lambda index: self.live_view.setVisible(index == 1))
+        self.history = table(['Time', 'Player 1', 'P1 ELO', 'Points', 'Player 2',
+                              'P2 ELO', 'Tournament'])
         layout.addWidget(self.history)
+        actions = QHBoxLayout()
+        point_history = QPushButton('Point history…')
+        point_history.clicked.connect(self.match_point_history)
+        actions.addWidget(point_history)
+        actions.addStretch()
         remove = QPushButton('Delete selected match…')
         remove.clicked.connect(self.delete_match)
-        layout.addWidget(remove, alignment=Qt.AlignmentFlag.AlignRight)
+        actions.addWidget(remove)
+        layout.addLayout(actions)
 
     def _leaderboards_tab(self):
         layout = self._tab('Leaderboards')
@@ -185,6 +205,7 @@ class Window(QMainWindow):
 
     def render(self, snapshot):
         self.players, matches, tournaments = snapshot
+        self.completed_matches = [m for m in matches if m['status'] == 'completed']
         by_id = {p['id']: p for p in self.players}
         tournament_names = {t['id']: t['name'] for t in tournaments}
         active = sorted((p for p in self.players if p['active']),
@@ -197,11 +218,26 @@ class Window(QMainWindow):
                 combo.addItem(player['name'], player['id'])
             combo.setCurrentIndex(max(0, combo.findData(previous)))
         self.register_button.setEnabled(len(active) >= 2)
+        elo_history = match_elo_history(self.players, matches)
         fill(self.history, [(m['id'], [
             datetime.fromisoformat(m['timestamp']).astimezone().strftime('%Y-%m-%d %H:%M:%S'),
-            by_id[m['player1']]['name'], f"{m['score1']} – {m['score2']}",
-            by_id[m['player2']]['name'], tournament_names.get(m['tournament_id'], '—')])
-            for m in reversed(matches)])
+            by_id[m['player1']]['name'], '', f"{m['score1']} – {m['score2']}",
+            by_id[m['player2']]['name'], '', tournament_names.get(m['tournament_id'], '—')])
+            for m in reversed(self.completed_matches)])
+        for row, match in enumerate(reversed(self.completed_matches)):
+            for column, player in ((2, 'player1'), (5, 'player2')):
+                elo = elo_history[match['id']][player]
+                before, change = elo['before'], elo['change']
+                color = 'green' if change >= 0 else 'red'
+                label = QLabel(f'{before:.2f} <span style="color: {color}">({change:+.2f})</span>')
+                label.setContentsMargins(3, 0, 3, 0)
+                label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+                item = self.history.item(row, column)
+                item.setText(f'{before:.2f} ({change:+.2f})')
+                # Keep accessible plain text without painting it beneath the label.
+                item.setForeground(QColor('transparent'))
+                item.setSizeHint(label.sizeHint())
+                self.history.setCellWidget(row, column, label)
         fill(self.members, [(p['id'], [p['name'], 'Active' if p['active'] else 'Retired'])
                             for p in sorted(self.players, key=lambda p: p['name'].casefold())])
         fill(self.ranking, [(s['player']['id'], [
@@ -210,8 +246,15 @@ class Window(QMainWindow):
             s['scored'], s['conceded'],
             ' '.join('✅' if won else '❌' for won in s['last5']) or '—'])
             for s in standings(self.players, matches)])
-        self.summary.setText(f'{len(matches)} matches · {len(active)} active players')
+        self.summary.setText(f'{len(self.completed_matches)} matches · {len(active)} active players')
+        self.live_view.render(self.players, matches)
         self.tournaments_view.render(self.players, matches, tournaments)
+
+    def match_point_history(self):
+        match_id = selected_id(self.history)
+        match = next((m for m in self.completed_matches if m['id'] == match_id), None)
+        if match is not None:
+            show_point_history(self, match, self.players)
 
     def register(self):
         a, b = self.player1.currentData(), self.player2.currentData()
@@ -226,7 +269,7 @@ class Window(QMainWindow):
         if match_id is None:
             return
         row = self.history.currentRow()
-        description = ' · '.join(self.history.item(row, c).text() for c in range(4))
+        description = ' · '.join(self.history.item(row, c).text() for c in (0, 1, 3, 4))
         if QMessageBox.question(self, 'Delete match', f'Delete this match?\n{description}\n\n'
                                 'Statistics and Elo will be recalculated.',
                                 defaultButton=QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:

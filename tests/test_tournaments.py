@@ -269,7 +269,7 @@ class TournamentUiTests(unittest.TestCase):
             view.register_result()
             self.wait(window)
             self.assertIn('Winner:', view.summary.text())
-            self.assertEqual(window.history.item(0, 4).text(), tournament['name'])
+            self.assertEqual(window.history.item(0, 6).text(), tournament['name'])
             self.assertEqual(window.ranking.item(0, 2).text(), '1016')
             self.assertFalse(view.register_button.isEnabled())
             window.close()

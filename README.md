@@ -27,7 +27,8 @@ with PyQt6 installed.
 ## Use
 
 1. Add members in **Players**.
-2. Select two players in **Matches**, enter their final points, and register.
+2. In **Matches**, choose **Final result** to enter a finished score, or **Live
+   scoring** to create a match and record each point.
 3. Open **Leaderboards** for rankings and totals. Use **Refresh** to pick up other
    people's changes; changing tabs also refreshes.
 4. Use **Tournament** to create a named event, select its players and system, and
@@ -35,8 +36,8 @@ with PyQt6 installed.
    match registration clears both player selections and resets both scores.
 
 Delete an incorrect match from history and register it again. The replacement
-counts at its new registration position. Scores must have a winner, but there is
-no enforced target score or win-by-two rule. Removing a player retires them;
+counts at its new registration position. Final-result entry requires a winner
+but does not enforce a target or overtime rule. Removing a player retires them;
 restore them from Players when needed. Renaming updates their name in all views.
 
 Elo starts at 1000, with K=32 and the standard 400-point expected-score formula.
@@ -44,6 +45,47 @@ Point margin does not affect Elo. All historical matches, including retired
 players' matches, are replayed in CSV row order. Only active players appear in
 the leaderboard; players without matches are unranked. Exact Elo determines
 ranking, with alphabetical ties; the displayed rating is rounded.
+Match history places **P1 ELO** beside Player 1 and **P2 ELO** beside Player 2.
+Each cell shows the pre-match rating in the normal text color, followed by its
+change in green for a gain or red for a loss, for example `1000.00 (+16.00)`.
+Values are recalculated when history changes, with two decimal places displayed.
+
+## Live scoring
+
+Select two players and a target (at least 2, default 7), then click **Create match**.
+Use the named **+1 point** buttons as points are played. The app automatically
+declares the winner and adds the completed result to history, Elo, and the Last 5
+results. In-progress matches do not affect leaderboards. Live scoring currently
+creates ordinary matches; tournament fixtures still use final-result entry.
+
+At a tie one point below the target (for example, **6–6 when playing to 7**),
+overtime begins. Each overtime round contains two points:
+
+- **2–0 or 0–2:** the player who won both points wins the match.
+- **1–1:** reset the overtime score to **0–0** and start a new two-point round.
+
+Consecutive points across a reset boundary do not win: A, B, B, A is two split
+rounds, so neither player has won. The screen shows cumulative totals separately
+from the current overtime score. History and leaderboard point totals include
+**all actual points**, including split overtime rounds; resets never erase them.
+
+Each click is saved immediately. Use **Resume / review** to continue a match after
+closing the app, or from another computer. Use **Refresh** to load other people's
+changes. If another client has scored since your last view, your click is rejected
+and you must refresh before trying again. Players who retire after a match starts
+can still finish it.
+
+**Undo last point** corrects a misclick and restores the prior overtime state.
+Undoing a winning point requires confirmation and reopens the match, removing its
+result from the leaderboard until it finishes again. Finished live matches enter
+Elo history in completion order, not creation order. Re-finishing after an undo
+places the result at its new completion position. **Delete live match** removes
+an abandoned or mistaken match and its point log.
+
+**Point history** shows the scorer, time, cumulative score, and overtime round
+for every recorded point. It is available in Live scoring and for completed
+matches in the history table. Final-result-only matches have no point sequence.
+No advanced clutch/player analytics are computed yet.
 
 ## Tournaments
 
@@ -88,17 +130,28 @@ adds them at the end of global history, so Elo is recalculated in that new order
 `data/players.csv`, `data/matches.csv`, and `data/tournaments.csv` are UTF-8 tables created as needed and
 excluded from Git. Players have stable IDs, names, and `active` (1/0). Matches
 have IDs, UTC timestamps, player IDs, integer scores, and optional tournament and
-fixture IDs. Tournaments store their name, system, UTC creation time, saved player
+fixture IDs. Live matches use four additional columns in the same match table:
+`target_points`, `point_log`, `status`, and `revision`. `point_log` is an ordered
+JSON list of objects containing the scoring player's stable ID (`player`) and UTC
+`timestamp`. List position is the point order; overtime and cumulative totals can
+be reconstructed from the target and sequence. Undo removes the mistaken last
+event, and `revision` increases on every point/undo to reject stale submissions.
+`status` is `in_progress` or `completed`. The match `timestamp` records creation
+until the first finish, then its most recent completion. Existing final-result
+matches have no target, an empty point log, status `completed`, and revision 0.
+Point logs, totals, and completion are written together in one atomic table
+replacement. Tournaments store their name, system, UTC creation time, saved player
 draw (a JSON list in one CSV cell), and group count. Brackets and completion are
 reconstructed from the ledger; saving a result only writes `matches.csv`.
 Times display in the viewer's local timezone. Back up **all three files together
 while all apps are closed**.
 Do not edit CSV files manually while anyone is using the app.
 
-**Upgrading from the original release:** close all old app instances before
+**Upgrading from an earlier release:** close all old app instances before
 launching the new executable. Existing players and matches are preserved. Old
-match headers are read without modification and gain the two tournament columns
-on the first match save/deletion. Old executables cannot read the extended match
+match headers (both the original and tournament versions) are read without
+modification and gain missing columns on the first match save/deletion.
+Old executables cannot read the extended match
 table; everyone should use the updated shared executable.
 
 All reads and writes acquire `data/.write-lock` using exclusive directory creation.
@@ -125,7 +178,8 @@ operation must report an error and succeed on retry without losing prior rows.
 Also test rename, retirement, deletion, and launching the bundle from a different
 working directory. Same-host tests do not establish cross-client SMB correctness.
 
-Automated tests cover Elo, match-entry reset, all tournament systems, odd/even
+Automated tests cover Elo, match-entry reset, live scoring and repeated overtime
+resets, point history, resume/undo/completion, stale scoring attempts, all tournament systems, odd/even
 player validation, byes, group qualification and loss routing, one-match finals,
 completion/history/reopening, legacy CSV compatibility, failed writes, and
 concurrent submissions (including duplicate tournament results). A second

@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from ranking import standings
+from ranking import standings, match_elo_changes, match_elo_history
 from storage import Store, StoreError
 
 
@@ -39,15 +39,25 @@ class LedgerTests(unittest.TestCase):
         players, matches, _ = self.store.register(self.a, self.b, 11, 8)
         rows = standings(players, matches)
         self.assertEqual([r['elo'] for r in rows], [1016, 984])
+        self.assertEqual(match_elo_changes(players, matches)[matches[0]['id']], 16)
         self.assertEqual((rows[0]['wins'], rows[0]['scored'], rows[0]['conceded']), (1, 11, 8))
         first = matches[0]['id']
         players, matches, _ = self.store.register(self.a, self.b, 0, 11)
+        changes = match_elo_changes(players, matches)
+        history = match_elo_history(players, matches)
+        self.assertEqual(history[matches[-1]['id']]['player1']['before'], 1016)
+        self.assertEqual(history[matches[-1]['id']]['player2']['before'], 984)
+        self.assertLess(history[matches[-1]['id']]['player1']['change'], 0)
+        self.assertGreater(history[matches[-1]['id']]['player2']['change'], 0)
+        self.assertEqual(changes[first], 16)
+        self.assertAlmostEqual(changes[matches[-1]['id']], 32 / (1 + 10 ** (-32 / 400)))
         self.assertAlmostEqual(sum(r['elo'] for r in standings(players, matches)), 2000)
         players, matches, _ = self.store.delete_match(first)
         rows = standings(players, matches)
         self.assertEqual(rows[0]['player']['id'], self.b)
         self.assertEqual(rows[0]['elo'], 1016)
         self.assertEqual(rows[1]['losses'], 1)
+        self.assertEqual(match_elo_changes(players, matches), {matches[0]['id']: 16})
 
     def test_player_identity_and_retirement(self):
         self.store.register(self.a, self.b, 11, 2)
@@ -160,6 +170,10 @@ class UiTests(unittest.TestCase):
             window.register()
             self.wait_for_idle(window)
             self.assertEqual(window.history.rowCount(), 1)
+            self.assertEqual(window.history.item(0, 2).text(), '1000.00 (+16.00)')
+            self.assertEqual(window.history.item(0, 5).text(), '1000.00 (-16.00)')
+            self.assertIn('color: green', window.history.cellWidget(0, 2).text())
+            self.assertIn('color: red', window.history.cellWidget(0, 5).text())
             self.assertEqual(window.score1.value(), 0)
             self.assertEqual(window.score2.value(), 0)
             self.assertIsNone(window.player1.currentData())
