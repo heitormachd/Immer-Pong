@@ -1,6 +1,6 @@
 import unittest
 
-from ranking import database_stats, rebuild_match_elos
+from ranking import database_stats, rebuild_match_elos, simple_ratings
 
 
 class StatsTests(unittest.TestCase):
@@ -32,6 +32,7 @@ class StatsTests(unittest.TestCase):
     def test_empty_database(self):
         result = database_stats([], [])
         self.assertIsNone(result['median_elo'])
+        self.assertEqual((result['overall']['matches'], result['overall']['points']), (0, 0))
 
     def test_totals_performance_and_median_use_completed_results(self):
         matches = [dict(id='1', player1='a', player2='b', score1=7, score2=2),
@@ -39,6 +40,7 @@ class StatsTests(unittest.TestCase):
                    self.match('a', status='in_progress')]
         rebuild_match_elos(matches)
         result = database_stats(self.players, matches)
+        self.assertEqual((result['overall']['matches'], result['overall']['points']), (2, 20))
         a = result['personal']['a']
         expected_second = 1 / (1 + 10 ** (-16 / 400))
         self.assertEqual((a['matches'], a['wins'], a['scored'], a['conceded']), (2, 1, 11, 9))
@@ -46,6 +48,24 @@ class StatsTests(unittest.TestCase):
         self.assertAlmostEqual(result['personal']['c']['performance'], 100 * expected_second)
         # Only A has two matches, so B/C's ratings must not affect the median.
         self.assertAlmostEqual(result['median_elo'], 1016 - 32 * expected_second)
+        self.assertAlmostEqual(a['elo'], 1016 - 32 * expected_second)
+        self.assertEqual(a['pd'], 2)
+        self.assertEqual(a['net_points'], 1)
+        self.assertEqual(a['rank'], 2)
+        self.assertIsNone(result['personal']['b']['rank'])
+
+    def test_srs_adjusts_for_schedule_and_centers_separate_groups(self):
+        players = [dict(id=p) for p in 'abcdef']
+        matches = [dict(player1='a', player2='b', score1=7, score2=3),
+                   dict(player1='a', player2='b', score1=7, score2=5),
+                   dict(player1='b', player2='c', score1=7, score2=1),
+                   dict(player1='d', player2='e', score1=7, score2=3),
+                   dict(player1='c', player2='d', score1=0, score2=7, status='in_progress')]
+        ratings = simple_ratings(players, matches)
+        for player, expected in dict(a=4, b=1, c=-5, d=2, e=-2).items():
+            self.assertAlmostEqual(ratings[player], expected)
+        self.assertIsNone(ratings['f'])
+        self.assertEqual(simple_ratings([], []), {})
 
     def test_performance_uses_saved_ratings_even_for_a_subset(self):
         match = self.match('aa')

@@ -4,7 +4,7 @@
 {% block content %}
 {% if match.tournament_id %}<a href="{{ url_for('tournament', tournament_id=match.tournament_id) }}">← Tournament</a>{% else %}<a href="{{ url_for('matches') }}">← Matches</a>{% endif %}
 <h2>{{ names[match.player1] }} vs {{ names[match.player2] }}</h2>
-<p>Target {{ match.target_points }} · {{ 'Completed' if state.winner else 'In progress' }}</p>
+<p>{{ 'Completed' if state.winner else 'In progress' }}</p>
 {% macro player_estimate(player, side) %}
 {% set estimate = estimates[player] %}
 <div class="match-estimate player-{{ side }}">
@@ -17,12 +17,13 @@
 {% endmacro %}
 <div{% if estimates %} class="match-score-layout"{% endif %}>
 {% if estimates %}{{ player_estimate(match.player1, 1) }}{% endif %}
-<div class="scoreboard"><strong>{{ match.score1 }} – {{ match.score2 }}</strong><span>Cumulative points</span></div>
+<div class="scoreboard">
+<span>First to {{ 2 if state.overtime_round else match.target_points }} points wins</span>
+<strong>{% if state.overtime_round %}{{ state.overtime_score[0] }}<sub aria-label="Player 1 accumulated points">{{ match.score1 }}</sub> – {{ state.overtime_score[1] }}<sub aria-label="Player 2 accumulated points">{{ match.score2 }}</sub>{% else %}{{ match.score1 }} – {{ match.score2 }}{% endif %}</strong>
+</div>
 {% if estimates %}{{ player_estimate(match.player2, 2) }}{% endif %}
 </div>
-{% if estimates %}<p class="muted match-estimate-note">Elo-based odds · Winner gains the Elo shown; opponent loses the same amount.</p>{% endif %}
 {% if state.winner %}<p class="winner">Winner: {{ names[state.winner] }}</p>{% endif %}
-{% if state.overtime_round %}<p>Overtime round {{ state.overtime_round }}: <b>{{ state.overtime_score[0] }} – {{ state.overtime_score[1] }}</b>.</p>{% endif %}
 <div class="row scoring">
 {% for player in [match.player1, match.player2] %}<form method="post">{{ csrf() }}{{ hidden('action', 'point') }}{{ hidden('player_id', player) }}{{ hidden('revision', match.revision) }}<button class="player-{{ loop.index }}" {% if state.winner %}disabled{% endif %}>{{ names[player] }} +1 point</button></form>{% endfor %}
 </div>

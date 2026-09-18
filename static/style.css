@@ -109,3 +109,7 @@ details > .table-scroll { margin-top: 16px; margin-bottom: 0; }
   .match-estimate .number { white-space: normal; }
   .match-estimate .win-probability { font-size: 22px; }
 }
+
+.scoreboard sub { font-size: 18px; color: #aaaaaa; margin-left: 3px; }
+.elo-card { position: relative; padding-bottom: 40px; }
+.elo-card .stat-rank { position: absolute; bottom: 14px; left: 0; right: 0; font-size: 14px; color: #aaaaaa; }

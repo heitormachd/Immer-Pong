@@ -37,6 +37,48 @@ def rebuild_match_elos(matches):
         ratings[a], ratings[b] = x + change, y - change
 
 
+def simple_ratings(players, matches):
+    """Solve SRS = mean margin + mean opponent SRS, centered per connected group."""
+    opponents = {p['id']: {} for p in players}
+    margins = dict.fromkeys(opponents, 0)
+    for match in matches:
+        if match.get('status', 'completed') != 'completed':
+            continue
+        a, b = match['player1'], match['player2']
+        margin = match['score1'] - match['score2']
+        for player, opponent, difference in ((a, b, margin), (b, a, -margin)):
+            opponents[player][opponent] = opponents[player].get(opponent, 0) + 1
+            margins[player] += difference
+    ratings = dict.fromkeys(opponents)
+    remaining = {p for p in opponents if opponents[p]}
+    while remaining:
+        group, pending = set(), [min(remaining)]
+        while pending:
+            player = pending.pop()
+            if player not in group:
+                group.add(player)
+                pending.extend(opponents[player].keys() - group)
+        remaining -= group
+        ids = sorted(group)
+        # The schedule Laplacian has one free offset; replace one equation
+        # with sum(ratings) = 0 to fix it without an external solver dependency.
+        matrix = [[float(sum(opponents[p].values()) if p == q
+                         else -opponents[p].get(q, 0)) for q in ids] + [float(margins[p])]
+                  for p in ids]
+        matrix[-1] = [1.0] * len(ids) + [0.0]
+        for column in range(len(ids)):
+            pivot = max(range(column, len(ids)), key=lambda r: abs(matrix[r][column]))
+            matrix[column], matrix[pivot] = matrix[pivot], matrix[column]
+            divisor = matrix[column][column]
+            matrix[column] = [v / divisor for v in matrix[column]]
+            for row in range(len(ids)):
+                if row != column:
+                    factor = matrix[row][column]
+                    matrix[row] = [v - factor * w for v, w in zip(matrix[row], matrix[column])]
+        ratings.update({p: matrix[i][-1] for i, p in enumerate(ids)})
+    return ratings
+
+
 def database_stats(players, matches):
     """Point opportunity rates from completed logs; Elo from all completed results."""
     def counters():
@@ -78,11 +120,18 @@ def database_stats(players, matches):
             change = changes[match['id']]['player1']['change']
             performance[match['player1']] += change / 32
             performance[match['player2']] -= change / 32
+    srs = simple_ratings(players, matches)
+    ranks = {row['player']['id']: row['rank'] for row in standings(players, matches)}
     for player_id, row in summaries.items():
-        personal[player_id].update(matches=row['matches'], wins=row['wins'],
+        personal[player_id].update(rank=ranks.get(player_id), srs=srs[player_id],
+                                   pd=row['scored'] - row['conceded'],
+                                   net_points=(row['scored'] - row['conceded']) / row['matches']
+                                   if row['matches'] else None, elo=row['elo'], matches=row['matches'], wins=row['wins'],
                                    scored=row['scored'], conceded=row['conceded'],
                                    performance=100 * performance[player_id] / row['matches']
                                    if row['matches'] else None)
+    overall.update(matches=sum(row['matches'] for row in summaries.values()) // 2,
+                   points=sum(row['scored'] for row in summaries.values()))
     ratings = [row['elo'] for row in summaries.values() if row['matches'] > 1]
     return dict(overall=overall, personal=personal,
                 median_elo=median(ratings) if ratings else None)
