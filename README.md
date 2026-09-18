@@ -1,28 +1,127 @@
 # Ping-pong
 
-A minimal PyQt6 scorekeeper for a shared NAS folder. Everyone uses the same data;
-there are no accounts or administrator roles.
+A small office scorekeeper with a Flask/HTML interface and shared CSV storage.
+The browser UI keeps the desktop app's simple tabs, tables, and controls. There
+are no accounts or administrator roles: everyone who can reach it can edit scores.
+The existing PyQt desktop app remains available during migration.
 
-## Run
+## Run locally
 
-On Arch Linux x86_64, open the shared `ping-pong` executable in your file manager,
-or run `/path/to/shared/ping-pong/ping-pong` in a terminal. No Python installation
-or administrator permissions are required for the bundled version. The NAS must
-permit executing files and writing to this directory. Keep the executable here:
-copying it elsewhere creates a separate data location.
+From the repository directory, install the web dependencies and start Gunicorn:
 
-The bundle includes Python and Qt but still needs compatible system libraries
-and a desktop session. Test it on a colleague's machine before rollout, especially
-if their Arch installation is older than the build machine. File managers may ask
-you to confirm that an executable is trusted.
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/gunicorn --bind 127.0.0.1:8080 --workers 1 --threads 1 'web:create_app()'
+```
 
-For development, create a local virtual environment (outside the NAS if possible),
-install `requirements.txt`, and run `python /path/to/shared/ping-pong/app.py`.
-Build a release with `bash build.sh` using Python 3 with venv/pip and internet
-access. It builds in a temporary local directory and replaces the root executable
-only when successful. No sudo is needed. Run tests with
-`QT_QPA_PLATFORM=offscreen python -m unittest discover -s tests -v` in an environment
-with PyQt6 installed.
+Open **http://localhost:8080/**. Stop with Ctrl+C. This uses the **existing
+`data/players.csv`, `data/matches.csv`, and `data/tournaments.csv` beside `web.py`**,
+regardless of the working directory. Browser edits save to those files immediately;
+this is not demo data. Missing tables are created on the first relevant save.
+No CSV format conversion or database migration is needed.
+
+Use one Gunicorn worker and one thread: requests are short and this serializes
+CSV operations within the service. Existing directory locks still protect against
+other app instances. A service restart expires open forms; refresh before saving.
+Pages refresh after saves and when switching tabs. Use Refresh to see edits from
+other computers. Live scoring retains revision checks to reject stale clicks.
+Destructive actions ask for confirmation. JavaScript supplies those confirmations,
+local timestamps, and duplicate-click prevention; keep it enabled in your browser.
+
+## Container / QNAP deployment
+
+The image contains Python, Flask, Gunicorn, and the existing rules/storage modules;
+it does not need Qt or a desktop. With Docker Compose installed:
+
+```sh
+docker compose up --build -d
+docker compose logs -f
+# Stop before backing up the tables:
+docker compose down
+```
+
+Compose starts two independent services:
+
+| Service | Local URL | Host tables | NAS URL (planned) |
+|---|---|---|---|
+| Main | http://localhost:8080/ | `data/` | http://192.168.88.131/immer-pong/ |
+| Test | http://localhost:8081/ | `test_data/` | http://192.168.88.131/ping-pong-test/ |
+
+`test_data/` was seeded with a snapshot of the existing tables. It is a separate
+copy: test edits never sync back to `data/`. Test CSV files are ignored by Git;
+copy them separately when deploying. If empty, a service starts with no players
+or matches. The test interface is marked **Test server**. Cookies are separate,
+so switching between ports does not invalidate the other service's forms.
+
+To run the test service without Docker, in a second terminal:
+
+```sh
+.venv/bin/gunicorn --bind 127.0.0.1:8081 --workers 1 --threads 1 "web:create_app('test_data')"
+```
+
+Both relative data paths resolve beside `web.py`. Compose mounts `./data` at
+`/app/data` and `./test_data` at `/app/test_data` in separate containers. The image
+contains neither set of CSV files. Rebuilding preserves both host directories.
+
+### Planned QNAP deployment
+
+1. Copy the sources and both data directories to the NAS. Use absolute QNAP
+   paths for the two bind mounts if deploying outside this repository directory.
+2. The image uses UID/GID **1000:1000**. Set `user: "<uid>:<gid>"` on each service
+   if needed, using a NAS account that can write its data directory.
+3. Start with the NAS prefix configuration:
+
+   ```sh
+   docker compose -f compose.yaml -f compose.nas.yaml up --build -d
+   ```
+
+4. Configure the NAS HTTP reverse proxy on port 80 to forward `/immer-pong/`
+   to `127.0.0.1:8080` and `/ping-pong-test/` to `127.0.0.1:8081`, **preserving
+   the entire request path**. Redirect each bare prefix to its trailing-slash URL.
+   The app handles its prefix for links, assets, redirects, forms, and cookies.
+
+For an nginx proxy running on the NAS host, these locations belong inside the
+server block for `192.168.88.131` (the `proxy_pass` URLs have no trailing slash):
+
+```nginx
+location = /immer-pong { return 301 /immer-pong/; }
+location /immer-pong/ {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Host $http_host;
+}
+location = /ping-pong-test { return 301 /ping-pong-test/; }
+location /ping-pong-test/ {
+    proxy_pass http://127.0.0.1:8081;
+    proxy_set_header Host $http_host;
+}
+```
+
+This follows nginx's [path-preserving proxy behavior](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_pass).
+Keep the backend ports bound to loopback when the proxy runs on the host. A proxy
+in another container requires Docker networking instead of these loopback targets.
+Before rollout, confirm which QNAP service owns port 80 and whether its proxy
+supports path-based routing; the exact NAS configuration is still pending.
+No NAS settings have been changed. Keep access within the office network.
+
+## Tests
+
+Tests create temporary ledgers and do not modify the office CSV files:
+
+```sh
+.venv/bin/python -m unittest discover -s tests -p test_web.py -v
+# Complete suite, including the preserved desktop UI:
+.venv/bin/python -m pip install -r requirements-desktop.txt
+QT_QPA_PLATFORM=offscreen .venv/bin/python -m unittest discover -s tests -v
+```
+
+## Legacy desktop executable
+
+For the existing PyQt app, install `requirements-desktop.txt` and run
+`python app.py`. Build its shared-folder executable with `bash build.sh`.
+Keep that executable beside the shared `data/` directory; copying it elsewhere
+creates a separate data location. The bundle still requires compatible Linux
+system libraries and a desktop session. The web service does not require it.
 
 ## Use
 
@@ -32,7 +131,7 @@ with PyQt6 installed.
 3. Open **Leaderboards** for rankings and totals. Use **Refresh** to pick up other
    people's changes; changing tabs also refreshes.
 4. Use **Tournament** to create a named event, select its players and system, and
-   enter results by selecting a ready match in the bracket. Successful ordinary
+   enter results beside a ready match in the bracket. Successful ordinary
    match registration clears both player selections and resets both scores.
 
 Delete an incorrect match from history and register it again. The replacement
@@ -127,8 +226,7 @@ adds them at the end of global history, so Elo is recalculated in that new order
 
 ## Shared data and recovery
 
-`data/players.csv`, `data/matches.csv`, and `data/tournaments.csv` are UTF-8 tables created as needed and
-excluded from Git. Players have stable IDs, names, and `active` (1/0). Matches
+`data/players.csv`, `data/matches.csv`, and `data/tournaments.csv` are UTF-8 tables created as needed. Players have stable IDs, names, and `active` (1/0). Matches
 have IDs, UTC timestamps, player IDs, integer scores, and optional tournament and
 fixture IDs. Live matches use four additional columns in the same match table:
 `target_points`, `point_log`, `status`, and `revision`. `point_log` is an ordered
@@ -144,7 +242,7 @@ replacement. Tournaments store their name, system, UTC creation time, saved play
 draw (a JSON list in one CSV cell), and group count. Brackets and completion are
 reconstructed from the ledger; saving a result only writes `matches.csv`.
 Times display in the viewer's local timezone. Back up **all three files together
-while all apps are closed**.
+while the web service is stopped and all desktop apps are closed**.
 Do not edit CSV files manually while anyone is using the app.
 
 **Upgrading from an earlier release:** close all old app instances before
@@ -157,13 +255,14 @@ table; everyone should use the updated shared executable.
 All reads and writes acquire `data/.write-lock` using exclusive directory creation.
 Writes reread current data and replace one table via a flushed temporary file in
 the same directory. A busy lock reports an error immediately; retry with Refresh.
-Network operations run in a background thread. Wait for them before closing.
+The desktop app runs network operations in a background thread. The web service
+handles storage on the server; wait for a save response before closing the page.
 Malformed files produce an error and are never silently reset. A missing table
 is treated as empty (unless match references then fail validation); restore
 accidentally deleted tables from a backup.
 
-After a crash, a stale lock may remain. **First ensure all app instances on every
-computer are closed and no save is running.** Then remove the empty
+After a crash, a stale lock may remain. **First stop the web service, ensure all desktop app instances on every
+computer are closed, and confirm no save is running.** Then remove the empty
 `data/.write-lock` directory with `rmdir /path/to/shared/ping-pong/data/.write-lock`.
 Never remove a lock while another instance is active. Leftover `.save-*` files
 can be removed under the same conditions; they are not authoritative data.
@@ -184,4 +283,3 @@ player validation, byes, group qualification and loss routing, one-match finals,
 completion/history/reopening, legacy CSV compatibility, failed writes, and
 concurrent submissions (including duplicate tournament results). A second
 physical client and a real desktop launch still need validation before rollout.
-# Immer-Pong

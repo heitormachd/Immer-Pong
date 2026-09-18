@@ -1,0 +1,16 @@
+services:
+  ping-pong:
+    build: .
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+  ping-pong-test:
+    build: .
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - ./test_data:/app/test_data
+    command: ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "1", "--access-logfile", "-", "web:create_app('test_data')"]
+    restart: unless-stopped

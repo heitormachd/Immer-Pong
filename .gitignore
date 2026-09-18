@@ -6,3 +6,6 @@
 __pycache__/
 *.pyc
 .venv/
+
+/test_data/*
+!/test_data/.gitkeep

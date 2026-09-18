@@ -6,7 +6,7 @@ trap 'rm -rf -- "$build_dir"' EXIT
 export PIP_CACHE_DIR="$build_dir/pip-cache"
 export PYINSTALLER_CONFIG_DIR="$build_dir/pyinstaller-cache"
 python3 -m venv "$build_dir/venv"
-"$build_dir/venv/bin/python" -m pip install -r "$project_dir/requirements.txt" 'pyinstaller>=6.16,<7'
+"$build_dir/venv/bin/python" -m pip install -r "$project_dir/requirements-desktop.txt" 'pyinstaller>=6.16,<7'
 "$build_dir/venv/bin/python" -m PyInstaller --clean --noconfirm --onefile \
     --name ping-pong --distpath "$build_dir/dist" --workpath "$build_dir/work" \
     --specpath "$build_dir" "$project_dir/app.py"

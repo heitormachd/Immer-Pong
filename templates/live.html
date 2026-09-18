@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import csrf, hidden, time with context %}
+{% block title %}Live scoring · Ping-pong{% endblock %}
+{% block content %}
+<a href="{{ url_for('matches') }}">← Matches</a>
+<h2>{{ names[match.player1] }} vs {{ names[match.player2] }}</h2>
+<p>Target {{ match.target_points }} · {{ 'Completed' if state.winner else 'In progress' }}</p>
+<div class="scoreboard"><strong>{{ match.score1 }} – {{ match.score2 }}</strong><span>Cumulative points</span></div>
+{% if state.winner %}<p class="winner">Winner: {{ names[state.winner] }}</p>{% endif %}
+{% if state.overtime_round %}<p>Overtime round {{ state.overtime_round }}: <b>{{ state.overtime_score[0] }} – {{ state.overtime_score[1] }}</b>. Win both points in a round; split rounds reset.</p>{% endif %}
+<div class="row scoring">
+{% for player in [match.player1, match.player2] %}<form method="post">{{ csrf() }}{{ hidden('action', 'point') }}{{ hidden('player_id', player) }}{{ hidden('revision', match.revision) }}<button {% if state.winner %}disabled{% endif %}>{{ names[player] }} +1 point</button></form>{% endfor %}
+</div>
+<div class="row">
+<form method="post" {% if state.winner %}data-confirm="Undo the winning point? This reopens the match and removes its result from the leaderboard."{% endif %}>{{ csrf() }}{{ hidden('action', 'undo') }}{{ hidden('revision', match.revision) }}<button {% if not match.point_log %}disabled{% endif %}>Undo last point{{ '…' if state.winner else '' }}</button></form>
+<form method="post" data-confirm="Delete this live match and all its points? Any completed result will also be removed.">{{ csrf() }}{{ hidden('action', 'delete') }}<button>Delete live match…</button></form>
+</div>
+<h2>Point history</h2>
+<div class="table-scroll"><table><thead><tr><th>Point</th><th>Scorer</th><th>Time</th><th>Cumulative score</th><th>Overtime</th></tr></thead><tbody>
+{% for point in state.history %}<tr><td>{{ point.number }}</td><td>{{ names[point.player] }}</td><td>{{ time(point.timestamp) }}</td><td>{{ point.score1 }} – {{ point.score2 }}</td><td>{% if point.overtime_round %}Round {{ point.overtime_round }} · {{ 'Split → reset' if point.reset else '%s – %s'|format(point.overtime_score[0], point.overtime_score[1]) }}{% else %}—{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="empty">No points yet.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

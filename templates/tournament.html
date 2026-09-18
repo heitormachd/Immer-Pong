@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import csrf, hidden, score with context %}
+{% block content %}
+<a href="{{ url_for('tournaments') }}">← Tournaments</a>
+<h2>{{ event.name }}</h2>
+<p>{{ systems[event.system] }} · {{ event.players|length }} players · {{ state.phase }}{% if state.champion %} · <b>Winner: {{ names[state.champion] }}</b>{% endif %}</p>
+{% if not state.complete %}<p class="muted">Later elimination rounds appear when their prerequisite matches finish.</p>{% endif %}
+{% for stage in state.fixtures|map(attribute='stage')|unique %}
+{% set fixtures = state.fixtures|selectattr('stage', 'equalto', stage)|list %}
+<h3>{{ stage }}</h3>
+<div class="table-scroll"><table><thead><tr><th>Round</th><th>Player 1</th><th>Score</th><th>Player 2</th><th>Status / enter result</th></tr></thead><tbody>
+{% for f in fixtures %}<tr><td>{{ f.round }}</td><td>{{ names.get(f.player1, 'Bye') }}</td><td class="number">{% if f.result %}{{ f.result.score1 }} – {{ f.result.score2 }}{% else %}—{% endif %}</td><td>{{ names.get(f.player2, 'Bye') }}</td><td>
+{% if f.bye %}Bye{% elif f.result %}Winner: {{ names[f.winner] }}{% else %}
+<form method="post" class="inline">{{ csrf() }}{{ hidden('action', 'result') }}{{ hidden('fixture_id', f.id) }}{{ hidden('player1', f.player1) }}{{ hidden('player2', f.player2) }}{{ score('score1', names[f.player1]) }}{{ score('score2', names[f.player2]) }}<button>Register result</button></form>
+{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+{% endfor %}
+{% for table in state.tables %}
+<h3>{{ table.label }} standings</h3>
+<div class="table-scroll"><table><thead><tr><th>Rank</th><th>Player</th><th>Wins</th><th>Losses</th><th>Points for</th><th>Points against</th></tr></thead><tbody>
+{% for row in table.rows %}<tr><td>{{ loop.index }}</td><td>{{ names[row.player] }}</td><td>{{ row.wins }}</td><td>{{ row.losses }}</td><td>{{ row.scored }}</td><td>{{ row.conceded }}</td></tr>{% endfor %}</tbody></table></div>
+{% endfor %}
+{% if latest %}<form method="post" class="row" data-confirm="Undo the displayed latest result? This changes the bracket and global Elo. If someone has registered a later result, this operation will be rejected.">{{ csrf() }}{{ hidden('action', 'undo') }}{{ hidden('match_id', latest.id) }}<button>Undo latest result…</button><span>{{ names[latest.player1] }} {{ latest.score1 }} – {{ latest.score2 }} {{ names[latest.player2] }}</span></form>{% endif %}
+<details class="box"><summary>Tournament rules</summary><p>Group and round-robin ties use wins, point difference, points scored, then saved draw order. The top half of each group (rounded up) enters the upper bracket; the rest enters the lower bracket with one playoff loss. Upper losers drop to lower; a lower-bracket loss eliminates the player. One grand final, with no reset. Undo results in reverse registration order.</p></details>
+{% endblock %}

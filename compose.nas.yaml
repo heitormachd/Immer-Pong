@@ -1,0 +1,7 @@
+# Use with: docker compose -f compose.yaml -f compose.nas.yaml up --build -d
+# The NAS reverse proxy must preserve these path prefixes.
+services:
+  ping-pong:
+    command: ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "1", "--access-logfile", "-", "web:create_app(url_prefix='/immer-pong')"]
+  ping-pong-test:
+    command: ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "1", "--access-logfile", "-", "web:create_app('test_data', url_prefix='/ping-pong-test')"]

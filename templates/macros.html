@@ -1,0 +1,8 @@
+{% macro csrf() -%}<input type="hidden" name="csrf" value="{{ session.csrf }}">{%- endmacro %}
+{% macro hidden(name, value) -%}<input type="hidden" name="{{ name }}" value="{{ value }}">{%- endmacro %}
+{% macro player_select(name, label, active) %}
+<label>{{ label }}<select name="{{ name }}" required><option value="">Select player…</option>{% for p in active %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select></label>
+{% endmacro %}
+{% macro score(name, label) %}<label>{{ label }}<input type="number" name="{{ name }}" min="0" max="2147483647" value="0" required></label>{% endmacro %}
+{% macro time(stamp) %}<time datetime="{{ stamp }}">{{ stamp }}</time>{% endmacro %}
+{% macro elo_cell(value) %}{{ '%.2f'|format(value.before) }} <span class="{{ 'gain' if value.change > 0 else 'loss' }}">({{ '%+.2f'|format(value.change) }})</span>{% endmacro %}
