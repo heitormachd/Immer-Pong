@@ -10,7 +10,7 @@ from werkzeug.exceptions import NotFound
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
 from live_scoring import live_state
-from ranking import database_stats, match_elo_history, standings
+from ranking import database_stats, match_elo_estimates, match_elo_history, standings
 from storage import Store, StoreError
 from tournaments import SYSTEMS, tournament_state
 
@@ -33,6 +33,7 @@ def create_app(data_directory=None, url_prefix=""):
         TEST_SITE=directory.name == 'test_data',
     )
     store = Store(directory)
+    store.migrate_elo()
     app.extensions['store'] = store
 
     @app.before_request
@@ -138,14 +139,14 @@ def create_app(data_directory=None, url_prefix=""):
             abort(404, 'Player not found.')
         if player_id and player_id == opponent_id:
             opponent_id = ''
-        history = [m for m in reversed(data['matches'])
+        duel_matches = [m for m in data['matches']
                    if m['status'] == 'completed' and player_id and opponent_id
                    and {m['player1'], m['player2']} == {player_id, opponent_id}]
-        wins = sum((m['score1'] > m['score2']) == (m['player1'] == player_id)
-                   for m in history)
         return render('stats.html', 'stats', **data,
                       stats=database_stats(data['players'], data['matches']), section=section,
-                      player_id=player_id, opponent_id=opponent_id, history=history, wins=wins)
+                      player_id=player_id, opponent_id=opponent_id,
+                      duel=database_stats(data['players'], duel_matches)['personal']
+                      if opponent_id else None, duel_count=len(duel_matches))
 
     @app.route('/live/<match_id>', methods=['GET', 'POST'])
     def live(match_id):
@@ -169,7 +170,10 @@ def create_app(data_directory=None, url_prefix=""):
         match = next((m for m in data['matches'] if m['id'] == match_id and m['target_points']), None)
         if match is None:
             abort(404, 'Live match not found. It may have been deleted.')
-        return render('live.html', 'matches', **data, match=match, state=live_state(match))
+        estimates = (match_elo_estimates(data['players'], data['matches'], match)
+                     if match['status'] == 'in_progress' else None)
+        return render('live.html', 'matches', **data, match=match, state=live_state(match),
+                      estimates=estimates)
 
     @app.route('/tournaments', methods=['GET', 'POST'])
     def tournaments():

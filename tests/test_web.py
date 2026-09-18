@@ -58,16 +58,38 @@ class WebTests(unittest.TestCase):
         page = self.client.get('/stats')
         self.assertEqual(page.status_code, 200)
         self.assertIn('Overall Stats', page.text)
-        self.assertIn('1000.00', page.text)
+        self.assertIn('1008.03', page.text)
+        self.assertNotIn('Average Elo', page.text)
         self.assertIn('no recorded opportunities', page.text)
         page = self.client.get('/stats', query_string=dict(section='player', player=a, opponent=b))
         self.assertEqual(page.status_code, 200)
-        self.assertIn('2 completed matches · Alice: 1 wins · Bob: 1 wins', page.text)
+        self.assertIn('2 completed matches between these players.', page.text)
+        self.assertIn('50.0%', page.text)
+        self.assertIn('66.7%', page.text)
+        self.assertIn('Points for', page.text)
+        self.assertIn('Points against', page.text)
+        self.assertIn('Performance above expectation', page.text)
+        self.assertNotIn('<th>Time</th>', page.text)
         self.assertIn('Bob (retired)', page.text)
         self.assertEqual(self.client.get('/stats?section=player').status_code, 200)
         self.assertEqual(self.client.get('/stats?player=missing').status_code, 404)
         self.assertEqual(self.client.get('/stats?section=invalid').status_code, 400)
         self.assertEqual(before, self.ledger())
+
+    def test_duel_rates_exclude_other_opponents_and_unfinished_matches(self):
+        a, b, c = self.ids[:3]
+        for opponent, sequence in ((b, (a, b, a, b, b, b)), (c, (a, a))):
+            match = self.store.create_live_match(a, opponent, 2)[1][-1]
+            for revision, player in enumerate(sequence):
+                self.store.score_live_match(match['id'], player, revision)
+        self.store.create_live_match(a, b, 2)
+        page = self.client.get('/stats', query_string=dict(section='player', player=a, opponent=b))
+        self.assertEqual(page.status_code, 200)
+        duel = page.text.split('Alice vs Bob')[1]
+        self.assertIn('1 completed matches', duel)
+        self.assertIn('33.3%', duel)  # Alice wins 1 of 3 serves against Bob.
+        self.assertIn('0/2', duel)  # Alice converts neither match point.
+        self.assertNotIn('Bob in this duel', duel)
 
     def test_final_score_redirect_resets_form_and_updates_elo(self):
         response = self.post('/', action='register', player1=self.ids[0], player2=self.ids[1], score1=7, score2=3)
@@ -100,6 +122,34 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.post('/', action='create_live', player1=eve, player2=self.ids[0], target=7).status_code, 409)
         self.post('/players', action='restore', player_id=eve)
         self.assertTrue(self.store.snapshot()[0][-1]['active'])
+
+    def test_live_elo_estimates_follow_current_ratings(self):
+        a, b = self.ids[:2]
+        response = self.post('/', action='create_live', player1=a, player2=b, target=2)
+        path = response.location
+        before = self.ledger()
+        page = self.client.get(path).text
+        self.assertEqual(page.count('50.0%'), 2)
+        self.assertEqual(page.count('+16.00'), 2)
+        self.assertNotIn('-16.00', page)
+        self.assertEqual(before, self.ledger())
+
+        self.store.register(a, b, 7, 0)
+        page = self.client.get(path).text
+        left, center_and_right = page.split('<div class="scoreboard">', 1)
+        for value in ('Elo 1016.00', '54.6%', '+14.53 Elo if win'):
+            self.assertIn(value, left)
+        for value in ('Elo 984.00', '45.4%', '+17.47 Elo if win'):
+            self.assertIn(value, center_and_right)
+        self.assertNotIn('-14.53', page)
+        self.assertNotIn('-17.47', page)
+        self.post(path, action='point', player_id=a, revision=0)
+        self.assertIn('54.6%', self.client.get(path).text)
+        self.post(path, action='point', player_id=a, revision=1)
+        self.assertNotIn('Win probability', self.client.get(path).text)
+        self.assertIn('(+14.53)', self.client.get('/').text)
+        self.post(path, action='undo', revision=2)
+        self.assertIn('54.6%', self.client.get(path).text)
 
     def test_live_scoring_overtime_stale_submission_finish_and_undo(self):
         a, b = self.ids[:2]

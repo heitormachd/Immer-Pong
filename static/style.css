@@ -93,3 +93,19 @@ details > .table-scroll { margin-top: 16px; margin-bottom: 0; }
 .stat-card dt { font-weight: 600; }
 .stat-card dd { margin: 0; display: flex; flex-direction: column; gap: 8px; font-variant-numeric: tabular-nums; }
 .stat-card strong { font-size: 28px; }
+
+.match-score-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr); align-items: center; gap: 16px; max-width: 800px; margin: auto; }
+.match-score-layout .scoreboard { width: 100%; min-width: 0; }
+.match-estimate { display: flex; flex-direction: column; gap: 6px; text-align: center; min-width: 0; overflow-wrap: anywhere; }
+.match-estimate.player-1 > strong:first-child { color: #6a9dcc; }
+.match-estimate.player-2 > strong:first-child { color: #c77d7d; }
+.match-estimate .win-probability { font-size: 26px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.match-estimate-note { text-align: center; font-size: 12px; }
+@media (max-width: 500px) {
+  .match-score-layout { gap: 8px; }
+  .match-score-layout .scoreboard { padding: 14px 4px; }
+  .match-score-layout .scoreboard strong { font-size: 30px; }
+  .match-estimate { font-size: 12px; }
+  .match-estimate .number { white-space: normal; }
+  .match-estimate .win-probability { font-size: 22px; }
+}

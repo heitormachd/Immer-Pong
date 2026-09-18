@@ -1,6 +1,6 @@
 import unittest
 
-from ranking import database_stats
+from ranking import database_stats, rebuild_match_elos
 
 
 class StatsTests(unittest.TestCase):
@@ -18,8 +18,8 @@ class StatsTests(unittest.TestCase):
         self.assertEqual(result['personal']['a']['match_point'], dict(wins=0, total=2))
         self.assertEqual(result['personal']['b']['against'], dict(wins=2, total=2))
         self.assertEqual(result['personal']['a']['against'], dict(wins=0, total=1))
-        self.assertEqual(result['average_elo'], 1000)
-        self.assertEqual(result['median_elo'], 1000)
+        self.assertNotIn('average_elo', result)
+        self.assertIsNone(result['median_elo'])
 
     def test_regular_match_and_excluded_results(self):
         result = database_stats(self.players, [self.match('aaa', target=3)])
@@ -31,5 +31,26 @@ class StatsTests(unittest.TestCase):
 
     def test_empty_database(self):
         result = database_stats([], [])
-        self.assertIsNone(result['average_elo'])
         self.assertIsNone(result['median_elo'])
+
+    def test_totals_performance_and_median_use_completed_results(self):
+        matches = [dict(id='1', player1='a', player2='b', score1=7, score2=2),
+                   dict(id='2', player1='c', player2='a', score1=7, score2=4),
+                   self.match('a', status='in_progress')]
+        rebuild_match_elos(matches)
+        result = database_stats(self.players, matches)
+        a = result['personal']['a']
+        expected_second = 1 / (1 + 10 ** (-16 / 400))
+        self.assertEqual((a['matches'], a['wins'], a['scored'], a['conceded']), (2, 1, 11, 9))
+        self.assertAlmostEqual(a['performance'], 100 * (0.5 - expected_second) / 2)
+        self.assertAlmostEqual(result['personal']['c']['performance'], 100 * expected_second)
+        # Only A has two matches, so B/C's ratings must not affect the median.
+        self.assertAlmostEqual(result['median_elo'], 1016 - 32 * expected_second)
+
+    def test_performance_uses_saved_ratings_even_for_a_subset(self):
+        match = self.match('aa')
+        match.update(elo1_before=800.0, elo2_before=1200.0)
+        result = database_stats(self.players, [match])
+        self.assertAlmostEqual(result['personal']['a']['performance'], 100 * 10 / 11)
+        self.assertAlmostEqual(result['personal']['b']['performance'], -100 * 10 / 11)
+        self.assertIsNone(result['personal']['c']['performance'])

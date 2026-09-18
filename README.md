@@ -97,8 +97,10 @@ continues to use `./build.sh` and ports 8080/8081.
    and Python dependencies during the build.
 3. The image uses UID/GID **1000:1000**. Set `user: "<uid>:<gid>"` on each service
    if needed, using a NAS account that can write the corresponding data directory.
-4. In **Container Station → Applications → Create Application**, choose an app
-   name, paste the entire `compose.nas.yaml`, validate it, and create the app.
+4. In **Container Station → Applications → Create Application**, use the name
+   **`immer-ping`**, paste the entire `compose.nas.yaml`, validate it, and create
+   the app. This is the Compose project name; its two services are `ping-pong`
+   and `ping-pong-test`.
    Container Station must support Compose source builds (`build`); validation of
    this file locally does not verify the installed QNAP version's build support.
    See the [QNAP Container Station guide](https://www.qnap.com/en/how-to/tutorial/article/how-to-use-container-station-3).
@@ -113,6 +115,23 @@ continues to use `./build.sh` and ports 8080/8081.
    Preserve the entire request path. Redirect each bare prefix to its trailing-slash
    URL. The app handles its prefix for links, assets, redirects, forms, and cookies.
    These backend ports avoid using QNAP's usual management port 8080.
+
+### Updating the existing NAS application
+
+After saving source changes in the shared project folder, run on the NAS via SSH:
+
+```sh
+cd /share/storage_das1/heitor/ping-pong
+sudo docker compose -p immer-ping -f compose.nas.yaml up -d --build
+```
+
+Always use `-p immer-ping` to target the existing Container Station application.
+A different project name creates a separate application and can fail because
+ports 18080/18081 are already allocated. The command rebuilds the images and
+replaces containers as needed; `data/` and `test_data/` remain in place. Restarting
+alone does not load source changes copied into the images.
+
+### Optional NAS reverse proxy
 
 For an nginx proxy running on the NAS host, these locations belong inside the
 server block for `192.168.88.131` (the `proxy_pass` URLs have no trailing slash):
@@ -268,9 +287,24 @@ Times display in the viewer's local timezone. Back up **all three files together
 while the service using those tables is stopped**.
 Do not edit CSV files manually while anyone is using the app.
 
-**Existing CSV data:** players and matches are preserved. Old match headers
-(both the original and tournament versions) are read without modification and gain
-missing columns on the first match save/deletion.
+Matches also store `elo1_before` and `elo2_before`: each player's Elo immediately
+before that completed result in ledger order. Unfinished matches leave these blank.
+Every match-table write recomputes these columns, including after deletions and
+undoing a winning point. History and Stats read the saved ratings. Elo starts at
+1000 with K=32; stored values retain full precision.
+
+**Existing CSV data:** app startup upgrades older match tables, preserving all
+results and point logs and backfilling historical Elo. Before the atomic upgrade,
+it saves a `matches.pre-elo-<id>.csv.bak` copy alongside the table. Subsequent starts
+leave upgraded tables unchanged. Stop older app instances before upgrading; their
+CSV reader does not understand the new columns.
+
+Stats shows median Elo for players with at least two completed matches (including
+retired players). Player performance above expectation is
+`100 × average(actual result − pre-match Elo win probability)`, in percentage
+points; positive means more wins than predicted. Match totals and points include
+all completed results, while serving and clutch rates require point histories.
+Duel comparisons use only the selected pair's completed matches.
 
 All reads and writes acquire `.write-lock` in the selected data directory using
 exclusive directory creation.

@@ -2,8 +2,10 @@
 
 import csv
 import json
+import math
 import os
 import random
+import shutil
 import tempfile
 import uuid
 from contextlib import contextmanager
@@ -12,6 +14,7 @@ from pathlib import Path
 
 from tournaments import SYSTEMS, tournament_state
 from live_scoring import live_state
+from ranking import rebuild_match_elos
 
 
 class StoreError(Exception):
@@ -22,7 +25,8 @@ class Store:
     PLAYER_FIELDS = ('id', 'name', 'active')
     LEGACY_MATCH_FIELDS = ('id', 'timestamp', 'player1', 'player2', 'score1', 'score2')
     TOURNAMENT_MATCH_FIELDS = (*LEGACY_MATCH_FIELDS, 'tournament_id', 'fixture_id')
-    MATCH_FIELDS = (*TOURNAMENT_MATCH_FIELDS, 'target_points', 'point_log', 'status', 'revision')
+    LIVE_MATCH_FIELDS = (*TOURNAMENT_MATCH_FIELDS, 'target_points', 'point_log', 'status', 'revision')
+    MATCH_FIELDS = (*LIVE_MATCH_FIELDS, 'elo1_before', 'elo2_before')
     TOURNAMENT_FIELDS = ('id', 'name', 'system', 'created_at', 'players', 'groups')
 
     def __init__(self, directory):
@@ -47,7 +51,8 @@ class Store:
             with (self.directory / name).open(newline='', encoding='utf-8') as handle:
                 reader = csv.DictReader(handle, strict=True)
                 legacy = name == 'matches.csv' and reader.fieldnames in (
-                    list(self.LEGACY_MATCH_FIELDS), list(self.TOURNAMENT_MATCH_FIELDS))
+                    list(self.LEGACY_MATCH_FIELDS), list(self.TOURNAMENT_MATCH_FIELDS),
+                    list(self.LIVE_MATCH_FIELDS))
                 if reader.fieldnames != list(fields) and not legacy:
                     raise ValueError(f'Unexpected columns in {name}')
                 rows = list(reader)
@@ -58,7 +63,9 @@ class Store:
                     for row in rows:
                         row.setdefault('tournament_id', '')
                         row.setdefault('fixture_id', '')
-                        row.update(target_points='', point_log='[]', status='completed', revision='0')
+                        for key, value in dict(target_points='', point_log='[]',
+                                               status='completed', revision='0').items():
+                            row.setdefault(key, value)
                 return rows
         except FileNotFoundError:
             return []
@@ -110,6 +117,14 @@ class Store:
                 match['target_points'] = int(match['target_points']) if match['target_points'] else None
                 match['point_log'] = json.loads(match['point_log'])
                 match['revision'] = int(match['revision'])
+                for field in ('elo1_before', 'elo2_before'):
+                    if field in match:
+                        match[field] = float(match[field]) if match[field] else None
+                        if match['status'] == 'completed':
+                            if match[field] is None or not math.isfinite(match[field]):
+                                raise ValueError('Invalid stored Elo')
+                        elif match[field] is not None:
+                            raise ValueError('Unfinished matches must not have stored Elo')
                 if match['target_points'] is None:
                     if match['point_log'] != [] or match['status'] != 'completed' or match['revision'] != 0:
                         raise ValueError('Invalid final-score match metadata')
@@ -144,6 +159,8 @@ class Store:
             raise StoreError('A match must have a winner; tied scores are not allowed.')
 
     def _write(self, name, fields, rows):
+        if name == 'matches.csv':
+            rebuild_match_elos(rows)
         temporary = None
         try:
             with tempfile.NamedTemporaryFile(mode='w', newline='', encoding='utf-8',
@@ -173,6 +190,21 @@ class Store:
     def snapshot(self):
         with self._locked():
             return self._load()
+
+    def migrate_elo(self):
+        """Back up and upgrade an older match table once, under the normal lock."""
+        with self._locked():
+            _, matches, _ = self._load()
+            path = self.directory / 'matches.csv'
+            if not path.exists():
+                return None
+            with path.open(newline='', encoding='utf-8') as handle:
+                if next(csv.reader(handle)) == list(self.MATCH_FIELDS):
+                    return None
+            backup = self.directory / f'matches.pre-elo-{uuid.uuid4().hex}.csv.bak'
+            shutil.copy2(path, backup)
+            self._write('matches.csv', self.MATCH_FIELDS, matches)
+            return backup
 
     def save_player(self, name, player_id=None):
         name = name.strip()

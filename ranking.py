@@ -1,8 +1,40 @@
 """Rebuild standings from the match ledger, in registration order."""
 
-from statistics import mean, median
+from statistics import median
 
 from live_scoring import live_state
+
+
+def elo_win_probability(elo1, elo2):
+    return 1 / (1 + 10 ** ((elo2 - elo1) / 400))
+
+
+def elo_change(elo1, elo2, won):
+    return 32 * (int(won) - elo_win_probability(elo1, elo2))
+
+
+def match_elo_estimates(players, matches, match):
+    stats, _ = _replay(players, matches)
+    a, b = match['player1'], match['player2']
+    return {player: dict(elo=stats[player]['elo'],
+                         probability=elo_win_probability(stats[player]['elo'], stats[opponent]['elo']),
+                         win=elo_change(stats[player]['elo'], stats[opponent]['elo'], True),
+                         loss=elo_change(stats[player]['elo'], stats[opponent]['elo'], False))
+            for player, opponent in ((a, b), (b, a))}
+
+
+def rebuild_match_elos(matches):
+    """Refresh persisted pre-match ratings in ledger completion order before saving."""
+    ratings = {}
+    for match in matches:
+        if match.get('status', 'completed') != 'completed':
+            match['elo1_before'] = match['elo2_before'] = None
+            continue
+        a, b = match['player1'], match['player2']
+        x, y = ratings.get(a, 1000.0), ratings.get(b, 1000.0)
+        match['elo1_before'], match['elo2_before'] = x, y
+        change = elo_change(x, y, match['score1'] > match['score2'])
+        ratings[a], ratings[b] = x + change, y - change
 
 
 def database_stats(players, matches):
@@ -39,9 +71,20 @@ def database_stats(players, matches):
             overtime_score = point['overtime_score']
             overtime = point['overtime_round'] or int(scores == (match['target_points'] - 1,) * 2)
 
-    ratings = [row['elo'] for row in _replay(players, matches)[0].values()]
+    summaries, changes = _replay(players, matches)
+    performance = {p['id']: 0.0 for p in players}
+    for match in matches:
+        if match.get('status', 'completed') == 'completed':
+            change = changes[match['id']]['player1']['change']
+            performance[match['player1']] += change / 32
+            performance[match['player2']] -= change / 32
+    for player_id, row in summaries.items():
+        personal[player_id].update(matches=row['matches'], wins=row['wins'],
+                                   scored=row['scored'], conceded=row['conceded'],
+                                   performance=100 * performance[player_id] / row['matches']
+                                   if row['matches'] else None)
+    ratings = [row['elo'] for row in summaries.values() if row['matches'] > 1]
     return dict(overall=overall, personal=personal,
-                average_elo=mean(ratings) if ratings else None,
                 median_elo=median(ratings) if ratings else None)
 
 
@@ -57,14 +100,17 @@ def _replay(players, matches):
             continue
         a, b = stats[match['player1']], stats[match['player2']]
         x, y = match['score1'], match['score2']
-        expected = 1 / (1 + 10 ** ((b['elo'] - a['elo']) / 400))
-        change = 32 * (int(x > y) - expected)
+        # Stored values avoid rebuilding rating history on reads. The fallback
+        # supports legacy snapshots and callers supplying unsaved matches.
+        before_a = match.get('elo1_before', a['elo'])
+        before_b = match.get('elo2_before', b['elo'])
+        change = elo_change(before_a, before_b, x > y)
         changes[match['id']] = {
-            'player1': {'before': a['elo'], 'change': change},
-            'player2': {'before': b['elo'], 'change': -change},
+            'player1': {'before': before_a, 'change': change},
+            'player2': {'before': before_b, 'change': -change},
         }
-        a['elo'] += change
-        b['elo'] -= change
+        a['elo'] = before_a + change
+        b['elo'] = before_b - change
         for row, scored, conceded in ((a, x, y), (b, y, x)):
             row['matches'] += 1
             row['wins'] += int(scored > conceded)
@@ -83,7 +129,16 @@ def match_elo_changes(players, matches):
 
 def match_elo_history(players, matches):
     """Pre-match rating and signed change for each player in completed matches."""
-    return _replay(players, matches)[1]
+    completed = [m for m in matches if m.get('status', 'completed') == 'completed']
+    if any('elo1_before' not in m for m in completed):
+        return _replay(players, matches)[1]
+    history = {}
+    for match in completed:
+        a, b = match['elo1_before'], match['elo2_before']
+        change = elo_change(a, b, match['score1'] > match['score2'])
+        history[match['id']] = dict(player1=dict(before=a, change=change),
+                                    player2=dict(before=b, change=-change))
+    return history
 
 
 def standings(players, matches):
