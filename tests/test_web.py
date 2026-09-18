@@ -109,7 +109,9 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.client.get(path).status_code, 200)
         # 1–1 starts overtime, A/B resets it, B/B wins the second round.
         for revision, player in enumerate((a, b, a, b, b, b)):
-            self.assertEqual(self.post(path, action='point', player_id=player, revision=revision).status_code, 303)
+            response = self.post(path, action='point', player_id=player, revision=revision)
+            self.assertEqual(response.status_code, 303)
+            self.assertEqual(response.location, '/' if revision == 5 else path)
             if revision == 0:
                 stale = self.post(path, action='point', player_id=b, revision=0)
                 self.assertEqual(stale.status_code, 409)

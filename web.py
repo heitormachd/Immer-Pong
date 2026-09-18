@@ -155,9 +155,10 @@ def create_app(data_directory=None, url_prefix=""):
                 player = request.form.get('player_id', '') if action == 'point' else None
                 _, rows, _ = store.score_live_match(match_id, player, integer('revision'))
                 finished = next((m for m in rows if m['id'] == match_id), None)
-                if action == 'point' and finished and finished['status'] == 'completed' \
-                        and finished['tournament_id']:
-                    return redirect(url_for('tournament', tournament_id=finished['tournament_id']), 303)
+                if action == 'point' and finished and finished['status'] == 'completed':
+                    if finished['tournament_id']:
+                        return redirect(url_for('tournament', tournament_id=finished['tournament_id']), 303)
+                    return redirect(url_for('matches'), 303)
             elif action == 'delete':
                 store.delete_match(match_id)
                 return redirect(url_for('matches'), 303)
