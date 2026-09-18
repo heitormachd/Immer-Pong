@@ -10,7 +10,7 @@ from werkzeug.exceptions import NotFound
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
 from live_scoring import live_state
-from ranking import match_elo_history, standings
+from ranking import database_stats, match_elo_history, standings
 from storage import Store, StoreError
 from tournaments import SYSTEMS, tournament_state
 
@@ -126,13 +126,38 @@ def create_app(data_directory=None, url_prefix=""):
         return render('leaderboards.html', 'leaderboards', **data,
                       rows=standings(data['players'], data['matches']))
 
+    @app.get('/stats')
+    def stats():
+        data = context()
+        section = request.args.get('section', 'overall')
+        if section not in ('overall', 'player'):
+            abort(400, 'Unknown stats section.')
+        player_id = request.args.get('player', '')
+        opponent_id = request.args.get('opponent', '')
+        if any(value and value not in data['names'] for value in (player_id, opponent_id)):
+            abort(404, 'Player not found.')
+        if player_id and player_id == opponent_id:
+            opponent_id = ''
+        history = [m for m in reversed(data['matches'])
+                   if m['status'] == 'completed' and player_id and opponent_id
+                   and {m['player1'], m['player2']} == {player_id, opponent_id}]
+        wins = sum((m['score1'] > m['score2']) == (m['player1'] == player_id)
+                   for m in history)
+        return render('stats.html', 'stats', **data,
+                      stats=database_stats(data['players'], data['matches']), section=section,
+                      player_id=player_id, opponent_id=opponent_id, history=history, wins=wins)
+
     @app.route('/live/<match_id>', methods=['GET', 'POST'])
     def live(match_id):
         if request.method == 'POST':
             action = request.form.get('action')
             if action in ('point', 'undo'):
                 player = request.form.get('player_id', '') if action == 'point' else None
-                store.score_live_match(match_id, player, integer('revision'))
+                _, rows, _ = store.score_live_match(match_id, player, integer('revision'))
+                finished = next((m for m in rows if m['id'] == match_id), None)
+                if action == 'point' and finished and finished['status'] == 'completed' \
+                        and finished['tournament_id']:
+                    return redirect(url_for('tournament', tournament_id=finished['tournament_id']), 303)
             elif action == 'delete':
                 store.delete_match(match_id)
                 return redirect(url_for('matches'), 303)
@@ -161,7 +186,12 @@ def create_app(data_directory=None, url_prefix=""):
     def tournament(tournament_id):
         if request.method == 'POST':
             action = request.form.get('action')
-            if action == 'result':
+            if action == 'start_live':
+                _, rows, _ = store.create_live_tournament_match(
+                    tournament_id, request.form.get('fixture_id'), integer('target'),
+                    (request.form.get('player1'), request.form.get('player2')))
+                return redirect(url_for('live', match_id=rows[-1]['id']), 303)
+            elif action == 'result':
                 store.register_tournament_match(tournament_id, request.form.get('fixture_id'),
                                                 integer('score1'), integer('score2'),
                                                 (request.form.get('player1'), request.form.get('player2')))
@@ -170,6 +200,7 @@ def create_app(data_directory=None, url_prefix=""):
                 data = context()
                 match_id = request.form.get('match_id')
                 if not any(m['id'] == match_id and m['tournament_id'] == tournament_id
+                           and m['status'] == 'completed'
                            for m in data['matches']):
                     raise StoreError('This result no longer exists. Refresh and try again.')
                 store.delete_match(match_id)
@@ -180,9 +211,16 @@ def create_app(data_directory=None, url_prefix=""):
         event = next((t for t in data['tournaments'] if t['id'] == tournament_id), None)
         if event is None:
             abort(404, 'Tournament not found.')
-        latest = next((m for m in reversed(data['matches']) if m['tournament_id'] == tournament_id), None)
+        state = tournament_state(event, data['matches'])
+        live_fixture = next((f for f in state['fixtures'] if f['live_match'] is not None), None)
+        next_fixture = None if live_fixture else next(
+            (f for f in state['fixtures']
+             if not f['bye'] and f['result'] is None and f['live_match'] is None), None)
+        latest = None if live_fixture else next(
+            (m for m in reversed(data['matches'])
+             if m['tournament_id'] == tournament_id and m['status'] == 'completed'), None)
         return render('tournament.html', 'tournaments', **data, event=event, latest=latest,
-                      state=tournament_state(event, data['matches']))
+                      state=state, next_fixture=next_fixture, live_fixture=live_fixture)
 
     if prefix:
         app.wsgi_app = DispatcherMiddleware(NotFound(), {prefix: app.wsgi_app})

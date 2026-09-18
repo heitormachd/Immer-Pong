@@ -118,8 +118,7 @@ class Store:
                 else:
                     state = live_state(match)
                     status = 'completed' if state['winner'] else 'in_progress'
-                    if (match['status'] != status or match['tournament_id'] or match['fixture_id']
-                            or match['revision'] < len(match['point_log'])
+                    if (match['status'] != status or match['revision'] < len(match['point_log'])
                             or (match['score1'], match['score2']) != (state['score1'], state['score2'])):
                         raise ValueError('Live match does not agree with its point log')
                     for event in match['point_log']:
@@ -276,6 +275,9 @@ class Store:
             tournament = next((t for t in tournaments if t['id'] == tournament_id), None)
             if tournament is None:
                 raise StoreError('Tournament not found. Refresh and try again.')
+            if any(m.get('tournament_id') == tournament_id and m.get('status') == 'in_progress'
+                   for m in matches):
+                raise StoreError('Finish the current tournament match before starting another.')
             state = tournament_state(tournament, matches)
             fixture = next((f for f in state['fixtures'] if f['id'] == fixture_id), None)
             if fixture is None or fixture['bye'] or fixture['result'] is not None:
@@ -291,6 +293,28 @@ class Store:
                                 target_points=None, point_log=[], status='completed', revision=0))
             # The result is the only persisted change. Brackets and completion are
             # derived from it, so a crash cannot leave two tables half-updated.
+            self._write('matches.csv', self.MATCH_FIELDS, matches)
+            return players, matches, tournaments
+
+    def create_live_tournament_match(self, tournament_id, fixture_id, target_points, expected_players):
+        if type(target_points) is not int or target_points < 2:
+            raise StoreError('Choose a target of at least 2 points.')
+        with self._locked():
+            players, matches, tournaments = self._load()
+            tournament = next((t for t in tournaments if t['id'] == tournament_id), None)
+            if tournament is None:
+                raise StoreError('Tournament not found. Refresh and try again.')
+            state = tournament_state(tournament, matches)
+            fixture = next((f for f in state['fixtures'] if f['id'] == fixture_id), None)
+            if (fixture is None or fixture['bye'] or fixture['result'] is not None
+                    or fixture['live_match'] is not None):
+                raise StoreError('This fixture is not available or already has a result. Refresh and try again.')
+            if tuple(expected_players) != (fixture['player1'], fixture['player2']):
+                raise StoreError('The bracket participants changed. Refresh before starting the match.')
+            matches.append(dict(id=uuid.uuid4().hex, timestamp=datetime.now(timezone.utc).isoformat(),
+                                player1=fixture['player1'], player2=fixture['player2'], score1=0, score2=0,
+                                tournament_id=tournament_id, fixture_id=fixture_id,
+                                target_points=target_points, point_log=[], status='in_progress', revision=0))
             self._write('matches.csv', self.MATCH_FIELDS, matches)
             return players, matches, tournaments
 

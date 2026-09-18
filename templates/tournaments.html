@@ -9,7 +9,6 @@
 <form method="post">{{ csrf() }}
 <div class="row"><label>Name<input name="name" required></label><label>System<select name="system" id="system">{% for key, label in systems.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select></label><label>Groups (group stage only)<input type="number" name="groups" id="groups" value="1" min="1" max="{{ [1, active|length // 2]|max }}" required></label></div>
 <fieldset><legend>Players</legend><div class="participants">{% for p in active %}<label><input type="checkbox" name="participants" value="{{ p.id }}">{{ p.name }}</label>{% else %}<p>Add active players first.</p>{% endfor %}</div></fieldset>
-<p class="muted">The draw is randomized and saved. Elimination formats require an even number of players. Group-stage double elimination requires at least four, with at least two per group.</p>
 <button {% if active|length < 2 %}disabled{% endif %}>Create tournament</button>
 </form></details>
 {% endblock %}

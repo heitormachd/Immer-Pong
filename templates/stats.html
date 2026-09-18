@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import time with context %}
+{% macro rate(label, value) %}
+<tr><th scope="row">{{ label }}</th><td class="number">{% if value.total %}{{ '%.1f'|format(100 * value.wins / value.total) }}% ({{ value.wins }}/{{ value.total }}){% else %}— (no recorded opportunities){% endif %}</td></tr>
+{% endmacro %}
+{% block content %}
+<h2>Stats</h2>
+<nav aria-label="Stats tabs">
+  <a href="{{ url_for('stats') }}" {% if section == 'overall' %}aria-current="page"{% endif %}>Overall Stats</a>
+  <a href="{{ url_for('stats', section='player') }}" {% if section == 'player' %}aria-current="page"{% endif %}>Player Stats</a>
+</nav>
+<p class="muted">Point winrates use completed matches with recorded point histories. Player 1 serves first; the previous point winner serves next. A match point is a point that could win the match, including within a two-point overtime round. Each opportunity counts separately.</p>
+{% if section == 'overall' %}
+<h3>Overall Stats</h3>
+<div class="table-scroll"><table><tbody>
+{{ rate('Server winrate', stats.overall.server) }}
+{{ rate('Match-point holder winrate', stats.overall.match_point) }}
+<tr><th scope="row">Average Elo</th><td>{{ '%.2f'|format(stats.average_elo) if stats.average_elo is not none else '—' }}</td></tr>
+<tr><th scope="row">Median Elo</th><td>{{ '%.2f'|format(stats.median_elo) if stats.median_elo is not none else '—' }}</td></tr>
+</tbody></table></div>
+<p class="muted">Elo includes all players (active and retired), starting at 1000, and all completed results. Final-score-only matches cannot contribute to point winrates.</p>
+{% else %}
+<h3>Player Stats</h3>
+<form method="get" action="{{ url_for('stats') }}" class="row">
+<input type="hidden" name="section" value="player">
+<label>Player<select name="player" required><option value="">Choose a player</option>{% for p in players %}<option value="{{ p.id }}" {% if p.id == player_id %}selected{% endif %}>{{ p.name }}{{ ' (retired)' if not p.active else '' }}</option>{% endfor %}</select></label>
+<label>Compare with<select name="opponent"><option value="">Choose an opponent (optional)</option>{% for p in players %}<option value="{{ p.id }}" {% if p.id == opponent_id %}selected{% endif %}>{{ p.name }}{{ ' (retired)' if not p.active else '' }}</option>{% endfor %}</select></label>
+<button>Show stats</button>
+</form>
+{% if player_id %}
+<h3>{{ names[player_id] }}</h3>
+<div class="table-scroll"><table><tbody>
+{{ rate('Server winrate', stats.personal[player_id].server) }}
+{{ rate('Match points converted (pro)', stats.personal[player_id].match_point) }}
+{{ rate('Match points saved (against)', stats.personal[player_id].against) }}
+</tbody></table></div>
+{% if opponent_id %}
+<h3>{{ names[player_id] }} vs {{ names[opponent_id] }}</h3>
+<p>{{ history|length }} completed matches · {{ names[player_id] }}: {{ wins }} wins · {{ names[opponent_id] }}: {{ history|length - wins }} wins</p>
+<div class="table-scroll"><table><thead><tr><th>Time</th><th>{{ names[player_id] }}</th><th>{{ names[opponent_id] }}</th><th>Winner</th></tr></thead><tbody>
+{% for m in history %}<tr><td>{{ time(m.timestamp) }}</td><td>{{ m.score1 if m.player1 == player_id else m.score2 }}</td><td>{{ m.score2 if m.player1 == player_id else m.score1 }}</td><td>{{ names[m.player1 if m.score1 > m.score2 else m.player2] }}</td></tr>
+{% else %}<tr><td colspan="4" class="empty">No completed matches between these players.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endif %}
+{% else %}<p>Select a player to see their stats.</p>{% endif %}
+{% endif %}
+{% endblock %}

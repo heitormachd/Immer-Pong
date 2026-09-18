@@ -1,5 +1,49 @@
 """Rebuild standings from the match ledger, in registration order."""
 
+from statistics import mean, median
+
+from live_scoring import live_state
+
+
+def database_stats(players, matches):
+    """Point opportunity rates from completed logs; Elo from all completed results."""
+    def counters():
+        return {key: dict(wins=0, total=0) for key in ('server', 'match_point', 'against')}
+
+    overall = counters()
+    personal = {p['id']: counters() for p in players}
+
+    def record(counter, won):
+        counter['total'] += 1
+        counter['wins'] += int(won)
+
+    for match in matches:
+        if match.get('status', 'completed') != 'completed' or not match.get('target_points'):
+            continue
+        sides = (match['player1'], match['player2'])
+        server = sides[0]
+        scores, overtime, overtime_score = (0, 0), 0, (0, 0)
+        for point in live_state(match)['history']:
+            winner = point['player']
+            record(overall['server'], winner == server)
+            record(personal[server]['server'], winner == server)
+            for side, player in enumerate(sides):
+                match_point = (overtime_score[side] == 1 if overtime
+                               else scores[side] == match['target_points'] - 1)
+                if match_point:
+                    record(overall['match_point'], winner == player)
+                    record(personal[player]['match_point'], winner == player)
+                    record(personal[sides[1 - side]]['against'], winner != player)
+            server = winner
+            scores = (point['score1'], point['score2'])
+            overtime_score = point['overtime_score']
+            overtime = point['overtime_round'] or int(scores == (match['target_points'] - 1,) * 2)
+
+    ratings = [row['elo'] for row in _replay(players, matches)[0].values()]
+    return dict(overall=overall, personal=personal,
+                average_elo=mean(ratings) if ratings else None,
+                median_elo=median(ratings) if ratings else None)
+
 
 def _replay(players, matches):
     stats = {

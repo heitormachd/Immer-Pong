@@ -19,6 +19,30 @@ window.addEventListener('pageshow', event => {
   if (event.persisted) window.location.reload();
 });
 document.querySelector('#go-back')?.addEventListener('click', () => window.history.back());
+const matchForm = document.querySelector('[data-match-form]');
+if (matchForm) {
+  const finalResult = matchForm.querySelector('#final-result-toggle');
+  const action = matchForm.querySelector('input[name="action"]');
+  const targetField = matchForm.querySelector('[data-live-target]');
+  const targetInput = targetField.querySelector('input');
+  const finalScoreFields = [...matchForm.querySelectorAll('[data-final-score]')];
+  const submit = matchForm.querySelector('[data-match-submit]');
+
+  const updateMatchMode = () => {
+    const isFinal = finalResult.checked;
+    action.value = isFinal ? 'register' : 'create_live';
+    targetField.hidden = isFinal;
+    targetInput.disabled = isFinal;
+    finalScoreFields.forEach(field => {
+      field.hidden = !isFinal;
+      field.querySelector('input').disabled = !isFinal;
+    });
+    submit.textContent = isFinal ? 'Register match' : 'Create match';
+  };
+
+  finalResult.addEventListener('change', updateMatchMode);
+  updateMatchMode();
+}
 const system = document.querySelector('#system');
 if (system) {
   const updateGroups = () => { document.querySelector('#groups').disabled = system.value !== 'group_double'; };

@@ -48,6 +48,27 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.post('/', action='unknown').status_code, 400)
         self.assertEqual(before, self.ledger())
 
+    def test_stats_and_head_to_head_are_read_only(self):
+        a, b, c = self.ids[:3]
+        self.store.register(a, b, 7, 3)
+        self.store.register(b, a, 7, 2)
+        self.store.register(a, c, 7, 0)
+        self.store.set_active(b, False)
+        before = self.ledger()
+        page = self.client.get('/stats')
+        self.assertEqual(page.status_code, 200)
+        self.assertIn('Overall Stats', page.text)
+        self.assertIn('1000.00', page.text)
+        self.assertIn('no recorded opportunities', page.text)
+        page = self.client.get('/stats', query_string=dict(section='player', player=a, opponent=b))
+        self.assertEqual(page.status_code, 200)
+        self.assertIn('2 completed matches · Alice: 1 wins · Bob: 1 wins', page.text)
+        self.assertIn('Bob (retired)', page.text)
+        self.assertEqual(self.client.get('/stats?section=player').status_code, 200)
+        self.assertEqual(self.client.get('/stats?player=missing').status_code, 404)
+        self.assertEqual(self.client.get('/stats?section=invalid').status_code, 400)
+        self.assertEqual(before, self.ledger())
+
     def test_final_score_redirect_resets_form_and_updates_elo(self):
         response = self.post('/', action='register', player1=self.ids[0], player2=self.ids[1], score1=7, score2=3)
         self.assertEqual(response.status_code, 303)
@@ -104,6 +125,35 @@ class WebTests(unittest.TestCase):
         self.assertIn('0 completed matches', self.client.get('/leaderboards').text)
         self.assertEqual(self.post(path, action='delete').status_code, 303)
         self.assertEqual(self.client.get(path).status_code, 404)
+
+    def test_tournament_matches_use_live_scoring_and_unlock_next_fixture(self):
+        a, b = self.ids[:2]
+        response = self.post('/tournaments', name='Live cup', system='single',
+                             participants=[a, b], groups=1)
+        tournament_path = response.location
+        tournament = self.store.snapshot()[2][-1]
+        fixture = next(f for f in tournament_state(tournament, [])["fixtures"]
+                       if not f['bye'] and not f['result'])
+
+        page = self.client.get(tournament_path)
+        self.assertIn('Next match', page.text)
+        self.assertIn('Start live match', page.text)
+        self.assertNotIn('Register result', page.text)
+        self.assertNotIn('<h4>Bracket</h4>', page.text)
+
+        response = self.post(tournament_path, action='start_live', fixture_id=fixture['id'],
+                             player1=fixture['player1'], player2=fixture['player2'], target=2)
+        self.assertEqual(response.status_code, 303)
+        live_path = response.location
+        self.assertIn('Open live score', self.client.get(tournament_path).text)
+
+        self.assertEqual(self.post(live_path, action='point', player_id=a, revision=0).status_code, 303)
+        response = self.post(live_path, action='point', player_id=a, revision=1)
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response.location, tournament_path)
+        self.assertTrue(tournament_state(tournament, self.store.snapshot()[1])['complete'])
+        completed_page = self.client.get(tournament_path).text
+        self.assertNotIn('Next match', completed_page)
 
     def test_all_tournament_systems_complete_and_reopen(self):
         for system in ('single', 'group_double', 'round_robin'):

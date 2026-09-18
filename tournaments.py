@@ -49,24 +49,37 @@ def tournament_state(tournament, matches):
     A group's lower half starts playoffs with one loss; group losses themselves
     do not count as elimination losses.
     """
-    recorded = [m for m in matches if m.get('tournament_id') == tournament['id']]
+    recorded = [m for m in matches if m.get('tournament_id') == tournament['id']
+                and m.get('status', 'completed') == 'completed']
+    live_records = [m for m in matches if m.get('tournament_id') == tournament['id']
+                    and m.get('status') == 'in_progress']
     results = {m['fixture_id']: m for m in recorded}
+    live_matches = {m['fixture_id']: m for m in live_records}
     if len(results) != len(recorded):
         raise ValueError('A tournament fixture has more than one result')
+    if len(live_matches) != len(live_records):
+        raise ValueError('A tournament fixture has more than one live match')
+    if set(results) & set(live_matches):
+        raise ValueError('A tournament fixture has both a result and a live match')
     fixtures, tables = [], []
 
     def game(key, stage, round_number, a, b):
         result = results.get(key)
+        live_match = live_matches.get(key)
         if result is not None and (result['player1'], result['player2']) != (a, b):
             raise ValueError('Tournament result does not match its bracket participants')
+        if live_match is not None and (live_match['player1'], live_match['player2']) != (a, b):
+            raise ValueError('Live tournament match does not match its bracket participants')
         bye = a is None or b is None
         if bye and result is not None:
             raise ValueError('A bye cannot have a recorded score')
+        if bye and live_match is not None:
+            raise ValueError('A bye cannot have a live match')
         winner = (a or b) if bye else (
             result['player1'] if result['score1'] > result['score2'] else result['player2']
         ) if result else None
         fixture = dict(id=key, stage=stage, round=round_number, player1=a, player2=b,
-                       result=result, bye=bye, winner=winner)
+                       result=result, live_match=live_match, bye=bye, winner=winner)
         fixtures.append(fixture)
         return fixture
 
@@ -86,7 +99,8 @@ def tournament_state(tournament, matches):
         return winners, losers
 
     def finish(phase, champion=None):
-        if set(results) - {f['id'] for f in fixtures}:
+        fixture_ids = {f['id'] for f in fixtures}
+        if (set(results) - fixture_ids) or (set(live_matches) - fixture_ids):
             raise ValueError('Tournament contains a result for a fixture that is not available')
         return dict(fixtures=fixtures, tables=tables, phase=phase,
                     complete=champion is not None, champion=champion)

@@ -2,12 +2,12 @@
 {% from 'macros.html' import csrf, hidden, time with context %}
 {% block title %}Live scoring · Ping-pong{% endblock %}
 {% block content %}
-<a href="{{ url_for('matches') }}">← Matches</a>
+{% if match.tournament_id %}<a href="{{ url_for('tournament', tournament_id=match.tournament_id) }}">← Tournament</a>{% else %}<a href="{{ url_for('matches') }}">← Matches</a>{% endif %}
 <h2>{{ names[match.player1] }} vs {{ names[match.player2] }}</h2>
 <p>Target {{ match.target_points }} · {{ 'Completed' if state.winner else 'In progress' }}</p>
 <div class="scoreboard"><strong>{{ match.score1 }} – {{ match.score2 }}</strong><span>Cumulative points</span></div>
 {% if state.winner %}<p class="winner">Winner: {{ names[state.winner] }}</p>{% endif %}
-{% if state.overtime_round %}<p>Overtime round {{ state.overtime_round }}: <b>{{ state.overtime_score[0] }} – {{ state.overtime_score[1] }}</b>. Win both points in a round; split rounds reset.</p>{% endif %}
+{% if state.overtime_round %}<p>Overtime round {{ state.overtime_round }}: <b>{{ state.overtime_score[0] }} – {{ state.overtime_score[1] }}</b>.</p>{% endif %}
 <div class="row scoring">
 {% for player in [match.player1, match.player2] %}<form method="post">{{ csrf() }}{{ hidden('action', 'point') }}{{ hidden('player_id', player) }}{{ hidden('revision', match.revision) }}<button {% if state.winner %}disabled{% endif %}>{{ names[player] }} +1 point</button></form>{% endfor %}
 </div>

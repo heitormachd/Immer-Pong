@@ -3,7 +3,6 @@
 <h2>Leaderboards</h2>
 <p>{{ active|length }} active players · {{ matches|selectattr('status', 'equalto', 'completed')|list|length }} completed matches</p>
 <div class="table-scroll"><table><thead><tr><th>Rank</th><th>Player</th><th>Elo</th><th>Matches</th><th>Wins</th><th>Losses</th><th>Win %</th><th>Points for</th><th>Points against</th><th>Last 5</th></tr></thead><tbody>
-{% for row in rows %}<tr><td>{{ row.rank or '—' }}</td><td>{{ row.player.name }}</td><td>{{ '%.0f'|format(row.elo) }}</td><td>{{ row.matches }}</td><td>{{ row.wins }}</td><td>{{ row.losses }}</td><td>{{ '%.1f'|format(100 * row.wins / row.matches) if row.matches else '—' }}</td><td>{{ row.scored }}</td><td>{{ row.conceded }}</td><td class="number">{% for win in row.last5 %}<span class="{{ 'gain' if win else 'loss' }}">{{ 'W' if win else 'L' }}</span> {% else %}—{% endfor %}</td></tr>
+{% for row in rows %}<tr><td>{{ row.rank or '—' }}</td><td>{{ row.player.name }}</td><td>{{ '%.0f'|format(row.elo) }}</td><td>{{ row.matches }}</td><td>{{ row.wins }}</td><td>{{ row.losses }}</td><td>{{ '%.1f'|format(100 * row.wins / row.matches) if row.matches else '—' }}</td><td>{{ row.scored }}</td><td>{{ row.conceded }}</td><td class="number">{% for win in row.last5 %}<span class="result-icon {{ 'gain' if win else 'loss' }}" title="{{ 'Win' if win else 'Loss' }}" aria-label="{{ 'Win' if win else 'Loss' }}">{{ '✓' if win else '✕' }}</span> {% else %}—{% endfor %}</td></tr>
 {% else %}<tr><td colspan="10" class="empty">Add players to get started.</td></tr>{% endfor %}</tbody></table></div>
-<p class="muted">Elo starts at 1000. Only completed matches count. Last 5 runs from oldest to newest.</p>
 {% endblock %}

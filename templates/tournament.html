@@ -1,18 +1,48 @@
 {% extends 'base.html' %}
-{% from 'macros.html' import csrf, hidden, score with context %}
+{% from 'macros.html' import csrf, hidden with context %}
 {% block content %}
 <a href="{{ url_for('tournaments') }}">← Tournaments</a>
 <h2>{{ event.name }}</h2>
 <p>{{ systems[event.system] }} · {{ event.players|length }} players · {{ state.phase }}{% if state.champion %} · <b>Winner: {{ names[state.champion] }}</b>{% endif %}</p>
-{% if not state.complete %}<p class="muted">Later elimination rounds appear when their prerequisite matches finish.</p>{% endif %}
-{% for stage in state.fixtures|map(attribute='stage')|unique %}
-{% set fixtures = state.fixtures|selectattr('stage', 'equalto', stage)|list %}
-<h3>{{ stage }}</h3>
-<div class="table-scroll"><table><thead><tr><th>Round</th><th>Player 1</th><th>Score</th><th>Player 2</th><th>Status / enter result</th></tr></thead><tbody>
-{% for f in fixtures %}<tr><td>{{ f.round }}</td><td>{{ names.get(f.player1, 'Bye') }}</td><td class="number">{% if f.result %}{{ f.result.score1 }} – {{ f.result.score2 }}{% else %}—{% endif %}</td><td>{{ names.get(f.player2, 'Bye') }}</td><td>
-{% if f.bye %}Bye{% elif f.result %}Winner: {{ names[f.winner] }}{% else %}
-<form method="post" class="inline">{{ csrf() }}{{ hidden('action', 'result') }}{{ hidden('fixture_id', f.id) }}{{ hidden('player1', f.player1) }}{{ hidden('player2', f.player2) }}{{ score('score1', names[f.player1]) }}{{ score('score2', names[f.player2]) }}<button>Register result</button></form>
-{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+{% if live_fixture or next_fixture %}
+<section class="next-match" id="next-match">
+<div class="next-match-label">{{ 'Current match' if live_fixture else 'Next match' }}</div>
+{% if live_fixture %}
+<h3>{{ names[live_fixture.player1] }} <span>vs</span> {{ names[live_fixture.player2] }}</h3>
+<p>{{ live_fixture.stage }} · Round {{ live_fixture.round }}</p>
+<a class="button" href="{{ url_for('live', match_id=live_fixture.live_match.id) }}">Open live score</a>
+{% elif next_fixture %}
+<h3>{{ names[next_fixture.player1] }} <span>vs</span> {{ names[next_fixture.player2] }}</h3>
+<p>{{ next_fixture.stage }} · Round {{ next_fixture.round }}</p>
+<form method="post" class="row">{{ csrf() }}{{ hidden('action', 'start_live') }}{{ hidden('fixture_id', next_fixture.id) }}{{ hidden('player1', next_fixture.player1) }}{{ hidden('player2', next_fixture.player2) }}<label>Target<input type="number" name="target" min="2" value="7" required></label><button>Start live match</button></form>
+{% endif %}
+</section>
+{% endif %}
+<h3>Bracket</h3>
+{% set stages = state.fixtures|map(attribute='stage')|unique|list %}
+{% for stage in stages %}
+{% set stage_fixtures = state.fixtures|selectattr('stage', 'equalto', stage)|list %}
+<section class="bracket-stage">
+{% if stage != 'Bracket' %}
+<h4>{{ stage }}</h4>
+{% endif %}
+<div class="bracket-scroll"><div class="bracket">
+{% for round_group in stage_fixtures|groupby('round') %}
+<div class="bracket-round">
+<div class="bracket-round-title">Round {{ round_group.grouper }}</div>
+{% for f in round_group.list %}
+{% set ready = not f.bye and not f.result and not f.live_match %}
+<article class="bracket-match{% if ready %} is-ready{% endif %}{% if f.live_match %} is-live{% endif %}{% if f.result %} is-complete{% endif %}">
+<div class="bracket-match-meta">Match {{ loop.index }}<span>{% if f.bye %}Bye{% elif f.live_match %}Live{% elif ready %}Ready{% endif %}</span></div>
+<div class="bracket-player{% if f.winner == f.player1 %} is-winner{% endif %}"><span>{{ names.get(f.player1, 'Bye') }}</span><span class="bracket-score">{% if f.live_match %}{{ f.live_match.score1 }}{% elif f.result %}{{ f.result.score1 }}{% endif %}</span></div>
+<div class="bracket-player{% if f.winner == f.player2 %} is-winner{% endif %}"><span>{{ names.get(f.player2, 'Bye') }}</span><span class="bracket-score">{% if f.live_match %}{{ f.live_match.score2 }}{% elif f.result %}{{ f.result.score2 }}{% endif %}</span></div>
+{% if f.live_match %}<div class="bracket-status"><a href="{{ url_for('live', match_id=f.live_match.id) }}">Open live score</a></div>{% endif %}
+</article>
+{% endfor %}
+</div>
+{% endfor %}
+</div></div>
+</section>
 {% endfor %}
 {% for table in state.tables %}
 <h3>{{ table.label }} standings</h3>

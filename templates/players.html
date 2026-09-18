@@ -8,5 +8,4 @@
 <form method="post" class="inline">{{ csrf() }}{{ hidden('action', 'rename') }}{{ hidden('player_id', p.id) }}<input name="name" value="{{ p.name }}" aria-label="Rename {{ p.name }}" required><button>Rename</button></form>
 <form method="post" {% if p.active %}data-confirm="Retire this player? Their match history will be kept."{% endif %}>{{ csrf() }}{{ hidden('action', 'retire' if p.active else 'restore') }}{{ hidden('player_id', p.id) }}<button>{{ 'Retire…' if p.active else 'Restore' }}</button></form>
 </td></tr>{% else %}<tr><td colspan="3" class="empty">No players yet.</td></tr>{% endfor %}</tbody></table></div>
-<p class="muted">Renaming updates all views. Retired players keep their history and can be restored.</p>
 {% endblock %}

@@ -1,23 +1,18 @@
 {% extends 'base.html' %}
-{% from 'macros.html' import csrf, hidden, player_select, score, time, elo_cell with context %}
+{% from 'macros.html' import csrf, hidden, player_select, time, elo_cell with context %}
 {% block content %}
-<h2>Final result</h2>
-<form method="post" class="row">
-  {{ csrf() }}{{ hidden('action', 'register') }}
-  {{ player_select('player1', 'Player 1', active) }}{{ score('score1', 'Points') }}
-  {{ player_select('player2', 'Player 2', active) }}{{ score('score2', 'Points') }}
-  <button {% if active|length < 2 %}disabled{% endif %}>Register</button>
+<h2>Matches</h2>
+<form method="post" class="row match-form" data-match-form>
+  {{ csrf() }}{{ hidden('action', 'create_live') }}
+  {{ player_select('player1', 'Player 1', active) }}
+  <label class="match-final-score" data-final-score hidden>Points<input type="number" name="score1" min="0" max="2147483647" value="0" required disabled></label>
+  {{ player_select('player2', 'Player 2', active) }}
+  <label class="match-final-score" data-final-score hidden>Points<input type="number" name="score2" min="0" max="2147483647" value="0" required disabled></label>
+  <label data-live-target>Target<input type="number" name="target" min="2" value="7" required></label>
+  <label class="mode-toggle"><input type="checkbox" id="final-result-toggle" name="final_result" value="1"> Enter final result</label>
+  <button type="submit" data-match-submit {% if active|length < 2 %}disabled{% endif %}>Create match</button>
 </form>
 {% if active|length < 2 %}<p>Add at least two active players in Players to start a match.</p>{% endif %}
-<details class="box"><summary>Live scoring — create or resume a match</summary>
-<form method="post" class="row">
-  {{ csrf() }}{{ hidden('action', 'create_live') }}
-  {{ player_select('player1', 'Player 1', active) }}{{ player_select('player2', 'Player 2', active) }}
-  <label>Target<input type="number" name="target" min="2" value="7" required></label>
-  <button {% if active|length < 2 %}disabled{% endif %}>Create match</button>
-</form>
-<p>At a tie one below the target, overtime uses two-point rounds. A split round resets; winning both points wins the match.</p>
-</details>
 {% set ongoing = matches|selectattr('status', 'equalto', 'in_progress')|list %}
 {% if ongoing %}<h2>In progress</h2><ul class="match-list">{% for m in ongoing %}<li><a href="{{ url_for('live', match_id=m.id) }}">{{ names[m.player1] }} {{ m.score1 }} – {{ m.score2 }} {{ names[m.player2] }}</a> · Target {{ m.target_points }} · Resume / review</li>{% endfor %}</ul>{% endif %}
 <h2>Match history</h2>

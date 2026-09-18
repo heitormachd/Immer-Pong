@@ -1,13 +1,27 @@
 # Ping-pong
 
 A small office scorekeeper with a Flask/HTML interface and shared CSV storage.
-The browser UI keeps the desktop app's simple tabs, tables, and controls. There
+The browser UI uses simple tabs, tables, and controls. There
 are no accounts or administrator roles: everyone who can reach it can edit scores.
-The existing PyQt desktop app remains available during migration.
+This branch is web-only. The original desktop version remains on `main`.
 
 ## Run locally
 
-From the repository directory, install the web dependencies and start Gunicorn:
+With Docker and the Compose plugin installed, run:
+
+```sh
+./build.sh
+```
+
+This builds the images and runs both servers in the current terminal:
+**http://localhost:8080/** uses `data/`; **http://localhost:8081/** uses
+`test_data/`. Logs stay visible. Press Ctrl+C to stop both containers; the CSV
+files remain in place. Run this from a terminal (it does not launch a new terminal
+window). The script works from any directory and uses the local Compose settings,
+not the NAS URL prefixes. Stop any standalone servers occupying these ports first.
+The attached behavior follows [Docker Compose up](https://docs.docker.com/reference/cli/docker/compose/up/).
+
+Alternatively, without Docker, install the web dependencies and start Gunicorn:
 
 ```sh
 python3 -m venv .venv
@@ -32,7 +46,7 @@ local timestamps, and duplicate-click prevention; keep it enabled in your browse
 ## Container / QNAP deployment
 
 The image contains Python, Flask, Gunicorn, and the existing rules/storage modules;
-it does not need Qt or a desktop. With Docker Compose installed:
+it runs both web services. With Docker Compose installed:
 
 ```sh
 docker compose up --build -d
@@ -64,22 +78,41 @@ Both relative data paths resolve beside `web.py`. Compose mounts `./data` at
 `/app/data` and `./test_data` at `/app/test_data` in separate containers. The image
 contains neither set of CSV files. Rebuilding preserves both host directories.
 
-### Planned QNAP deployment
+### QNAP Container Station deployment
 
-1. Copy the sources and both data directories to the NAS. Use absolute QNAP
-   paths for the two bind mounts if deploying outside this repository directory.
-2. The image uses UID/GID **1000:1000**. Set `user: "<uid>:<gid>"` on each service
-   if needed, using a NAS account that can write its data directory.
-3. Start with the NAS prefix configuration:
+`compose.nas.yaml` is a **standalone** application definition. Paste that one file
+into Container Station; do not combine it with `compose.yaml`. Local development
+continues to use `./build.sh` and ports 8080/8081.
 
-   ```sh
-   docker compose -f compose.yaml -f compose.nas.yaml up --build -d
-   ```
+1. Use the existing project folder on the NAS, containing `Dockerfile`,
+   `requirements.txt`, Python sources, `templates/`, `static/`, and the current
+   `data/` and `test_data/` directories. No image export/import is needed.
+2. Replace **every** `/share/Container/immer-pong` in `compose.nas.yaml` with
+   that folder's actual absolute path **on the NAS**, not its Linux client mount
+   path. Both services build from its Dockerfile on the NAS. The main service
+   mounts the existing `data/` CSVs; the test service mounts `test_data/`.
+   These are live bind mounts, not copies. Rebuilds do not reset the tables.
+   Missing data directories cause deployment to fail rather than silently
+   creating an empty directory. The NAS needs internet access for the base image
+   and Python dependencies during the build.
+3. The image uses UID/GID **1000:1000**. Set `user: "<uid>:<gid>"` on each service
+   if needed, using a NAS account that can write the corresponding data directory.
+4. In **Container Station → Applications → Create Application**, choose an app
+   name, paste the entire `compose.nas.yaml`, validate it, and create the app.
+   Container Station must support Compose source builds (`build`); validation of
+   this file locally does not verify the installed QNAP version's build support.
+   See the [QNAP Container Station guide](https://www.qnap.com/en/how-to/tutorial/article/how-to-use-container-station-3).
+   Rebuild the application image when deploying source changes.
+5. Configure the NAS HTTP reverse proxy on port 80:
 
-4. Configure the NAS HTTP reverse proxy on port 80 to forward `/immer-pong/`
-   to `127.0.0.1:8080` and `/ping-pong-test/` to `127.0.0.1:8081`, **preserving
-   the entire request path**. Redirect each bare prefix to its trailing-slash URL.
-   The app handles its prefix for links, assets, redirects, forms, and cookies.
+   | URL | Backend on NAS host | Tables |
+   |---|---|---|
+   | `http://192.168.88.131/immer-pong/` | `http://127.0.0.1:18080` | `data/` |
+   | `http://192.168.88.131/ping-pong-test/` | `http://127.0.0.1:18081` | `test_data/` |
+
+   Preserve the entire request path. Redirect each bare prefix to its trailing-slash
+   URL. The app handles its prefix for links, assets, redirects, forms, and cookies.
+   These backend ports avoid using QNAP's usual management port 8080.
 
 For an nginx proxy running on the NAS host, these locations belong inside the
 server block for `192.168.88.131` (the `proxy_pass` URLs have no trailing slash):
@@ -87,12 +120,12 @@ server block for `192.168.88.131` (the `proxy_pass` URLs have no trailing slash)
 ```nginx
 location = /immer-pong { return 301 /immer-pong/; }
 location /immer-pong/ {
-    proxy_pass http://127.0.0.1:8080;
+    proxy_pass http://127.0.0.1:18080;
     proxy_set_header Host $http_host;
 }
 location = /ping-pong-test { return 301 /ping-pong-test/; }
 location /ping-pong-test/ {
-    proxy_pass http://127.0.0.1:8081;
+    proxy_pass http://127.0.0.1:18081;
     proxy_set_header Host $http_host;
 }
 ```
@@ -109,30 +142,19 @@ No NAS settings have been changed. Keep access within the office network.
 Tests create temporary ledgers and do not modify the office CSV files:
 
 ```sh
-.venv/bin/python -m unittest discover -s tests -p test_web.py -v
-# Complete suite, including the preserved desktop UI:
-.venv/bin/python -m pip install -r requirements-desktop.txt
-QT_QPA_PLATFORM=offscreen .venv/bin/python -m unittest discover -s tests -v
+.venv/bin/python -m unittest discover -s tests -v
 ```
-
-## Legacy desktop executable
-
-For the existing PyQt app, install `requirements-desktop.txt` and run
-`python app.py`. Build its shared-folder executable with `bash build.sh`.
-Keep that executable beside the shared `data/` directory; copying it elsewhere
-creates a separate data location. The bundle still requires compatible Linux
-system libraries and a desktop session. The web service does not require it.
 
 ## Use
 
 1. Add members in **Players**.
-2. In **Matches**, choose **Final result** to enter a finished score, or **Live
-   scoring** to create a match and record each point.
+2. In **Matches**, live scoring is the default. Check **Enter final result** only
+   when recording a finished score directly.
 3. Open **Leaderboards** for rankings and totals. Use **Refresh** to pick up other
    people's changes; changing tabs also refreshes.
 4. Use **Tournament** to create a named event, select its players and system, and
-   enter results beside a ready match in the bracket. Successful ordinary
-   match registration clears both player selections and resets both scores.
+   start the highlighted next match from the bracket. Tournament matches always
+   use live scoring; finishing one unlocks the next fixture.
 
 Delete an incorrect match from history and register it again. The replacement
 counts at its new registration position. Final-result entry requires a winner
@@ -154,8 +176,9 @@ Values are recalculated when history changes, with two decimal places displayed.
 Select two players and a target (at least 2, default 7), then click **Create match**.
 Use the named **+1 point** buttons as points are played. The app automatically
 declares the winner and adds the completed result to history, Elo, and the Last 5
-results. In-progress matches do not affect leaderboards. Live scoring currently
-creates ordinary matches; tournament fixtures still use final-result entry.
+results. In-progress matches do not affect leaderboards. Live scoring supports
+both ordinary matches and tournament fixtures; a tournament has one active
+fixture at a time.
 
 At a tie one point below the target (for example, **6–6 when playing to 7**),
 overtime begins. Each overtime round contains two points:
@@ -210,10 +233,10 @@ by a lower round mixing its survivors with the upper losers. Further lower round
 are played if needed to determine a finalist. Byes are not matches and do not
 affect Elo.
 
-The bracket displays all played and currently available rounds. Later rounds
-appear once their prerequisites finish; group matches can be entered in any
-order. Every actual tournament result appears in **Matches**, with its tournament
-name, and counts toward the global leaderboard and Elo in registration order.
+The bracket displays all played and currently available rounds, with the next
+playable fixture highlighted. Later rounds appear once their prerequisites finish.
+Every actual tournament result appears in **Matches**, with its tournament name,
+and counts toward the global leaderboard and Elo in registration order.
 Participants are fixed at creation; a player retired afterward can still finish
 an existing tournament. Completed events remain in the selector for review, along
 with all scores, group tables, brackets, and their winner.
@@ -242,28 +265,26 @@ replacement. Tournaments store their name, system, UTC creation time, saved play
 draw (a JSON list in one CSV cell), and group count. Brackets and completion are
 reconstructed from the ledger; saving a result only writes `matches.csv`.
 Times display in the viewer's local timezone. Back up **all three files together
-while the web service is stopped and all desktop apps are closed**.
+while the service using those tables is stopped**.
 Do not edit CSV files manually while anyone is using the app.
 
-**Upgrading from an earlier release:** close all old app instances before
-launching the new executable. Existing players and matches are preserved. Old
-match headers (both the original and tournament versions) are read without
-modification and gain missing columns on the first match save/deletion.
-Old executables cannot read the extended match
-table; everyone should use the updated shared executable.
+**Existing CSV data:** players and matches are preserved. Old match headers
+(both the original and tournament versions) are read without modification and gain
+missing columns on the first match save/deletion.
 
-All reads and writes acquire `data/.write-lock` using exclusive directory creation.
+All reads and writes acquire `.write-lock` in the selected data directory using
+exclusive directory creation.
 Writes reread current data and replace one table via a flushed temporary file in
 the same directory. A busy lock reports an error immediately; retry with Refresh.
-The desktop app runs network operations in a background thread. The web service
-handles storage on the server; wait for a save response before closing the page.
+The web service handles storage on the server; wait for a save response before closing the page.
 Malformed files produce an error and are never silently reset. A missing table
 is treated as empty (unless match references then fail validation); restore
 accidentally deleted tables from a backup.
 
-After a crash, a stale lock may remain. **First stop the web service, ensure all desktop app instances on every
-computer are closed, and confirm no save is running.** Then remove the empty
+After a crash, a stale lock may remain. **First stop the service using those
+tables and confirm no save is running.** Then remove the empty
 `data/.write-lock` directory with `rmdir /path/to/shared/ping-pong/data/.write-lock`.
+For the test service, use the lock in `test_data/` instead.
 Never remove a lock while another instance is active. Leftover `.save-*` files
 can be removed under the same conditions; they are not authoritative data.
 
@@ -274,12 +295,13 @@ server may have accepted the write even if the response was lost.
 Before company rollout, use two **different computers** to register matches at
 the same time. A successful write must appear on both after refreshing; a busy
 operation must report an error and succeed on retry without losing prior rows.
-Also test rename, retirement, deletion, and launching the bundle from a different
-working directory. Same-host tests do not establish cross-client SMB correctness.
+Also test rename, retirement, deletion, and both NAS URL prefixes. Confirm that
+test-server edits do not change the main tables.
 
 Automated tests cover Elo, match-entry reset, live scoring and repeated overtime
 resets, point history, resume/undo/completion, stale scoring attempts, all tournament systems, odd/even
 player validation, byes, group qualification and loss routing, one-match finals,
 completion/history/reopening, legacy CSV compatibility, failed writes, and
 concurrent submissions (including duplicate tournament results). A second
-physical client and a real desktop launch still need validation before rollout.
+physical browser client and the QNAP container deployment still need validation
+before rollout.
