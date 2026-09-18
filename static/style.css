@@ -12,7 +12,7 @@ nav a[aria-current] { background: #303030; position: relative; top: 1px; font-we
 .panel { padding: 18px; background: #303030; min-height: 480px; }
 a { color: #dddddd; }
 button, .button { font: inherit; color: #eeeeee; border: 1px solid #777777; border-radius: 0; background: #444444; padding: 6px 12px; cursor: pointer; text-decoration: none; display: inline-block; white-space: nowrap; }
-button:hover, .button:hover { border-color: #aaaaaa; background: #505050; }
+button:not(:disabled):hover, .button:hover { border-color: #aaaaaa; background: #505050; }
 button:disabled { opacity: .5; cursor: default; }
 input, select { font: inherit; color: inherit; border: 1px solid #777777; border-radius: 0; background: #222222; padding: 6px; max-width: 100%; }
 input[type=number] { width: 86px; }
@@ -42,9 +42,10 @@ p { line-height: 1.5; }
 fieldset { border: 1px solid #666666; padding: 14px; }
 .participants { display: flex; gap: 16px; flex-wrap: wrap; }
 .participants label { display: flex; flex-direction: row; align-items: center; }
-.scoreboard { display: flex; flex-direction: column; gap: 6px; padding: 20px; border: 1px solid #666666; background: #222222; text-align: center; max-width: 430px; }
+.scoreboard { display: flex; flex-direction: column; gap: 6px; padding: 20px; border: 1px solid #666666; background: #222222; text-align: center; max-width: 430px; margin-inline: auto; }
 .scoreboard strong { font-size: 44px; font-variant-numeric: tabular-nums; }
 .scoreboard span { color: #aaaaaa; }
+.scoring { justify-content: center; }
 .scoring button { padding: 14px 22px; font-size: 16px; }
 .winner { font-weight: bold; color: #7bd88a; }
 .match-list { padding-left: 20px; line-height: 2; }
@@ -74,3 +75,21 @@ fieldset { border: 1px solid #666666; padding: 14px; }
 .mode-toggle { flex-direction: row; align-items: center; gap: 8px; white-space: nowrap; }
 :focus-visible { outline: 2px solid #eeeeee; outline-offset: 2px; }
 @media (max-width: 650px) { body { padding: 8px; } .panel { padding: 12px; } nav { padding: 0 5px; gap: 2px; } nav a { padding: 9px 8px; font-size: 13px; } .row { gap: 10px; } }
+
+.match-controls { display: flex; align-items: center; gap: 12px; }
+.mode-toggle input { margin: 0; }
+.scoring button { white-space: normal; overflow-wrap: anywhere; }
+.scoring .player-1 { background: #245786; border-color: #6a9dcc; }
+.scoring .player-1:not(:disabled):hover { background: #2e6b9f; }
+.scoring .player-2 { background: #883737; border-color: #c77d7d; }
+.scoring .player-2:not(:disabled):hover { background: #a14444; }
+.ongoing-tournaments { border-color: #999999; }
+.ongoing-tournaments .table-scroll { margin-bottom: 0; }
+details > .table-scroll { margin-top: 16px; margin-bottom: 0; }
+@media (max-width: 400px) { .match-controls { gap: 8px; } .match-controls button { padding-inline: 8px; } }
+
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 200px)); gap: 12px; margin: 16px 0 24px; }
+.stat-card { aspect-ratio: 1; padding: 16px; border: 1px solid #666666; background: #222222; display: flex; flex-direction: column; justify-content: center; gap: 16px; text-align: center; }
+.stat-card dt { font-weight: 600; }
+.stat-card dd { margin: 0; display: flex; flex-direction: column; gap: 8px; font-variant-numeric: tabular-nums; }
+.stat-card strong { font-size: 28px; }

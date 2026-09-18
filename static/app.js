@@ -49,3 +49,7 @@ if (system) {
   system.addEventListener('change', updateGroups);
   updateGroups();
 }
+
+document.querySelectorAll('[data-stats-form] select').forEach(select => {
+  select.addEventListener('change', () => select.form.requestSubmit());
+});
