@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Ping-pong{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body>
+<main class="window">
+  <header><h1>Ping-pong{% if config.TEST_SITE %} · Test server{% endif %}</h1><a class="button" href="{{ request.script_root }}{{ request.path }}">Refresh</a></header>
+  <nav aria-label="Main tabs">
+  {% for endpoint, label in [('matches', 'Matches'), ('leaderboards', 'Leaderboards'), ('players', 'Players'), ('tournaments', 'Tournaments'), ('stats', 'Stats')] %}
+    <a href="{{ url_for(endpoint) }}" {% if tab == endpoint %}aria-current="page"{% endif %}>{{ label }}</a>
+  {% endfor %}
+  </nav>
+  <section class="panel">{% block content %}{% endblock %}</section>
+</main>
+</body>
+</html>

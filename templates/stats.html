@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% macro rate(label, value) %}
+<div class="stat-card"><dt>{{ label }}</dt><dd>{% if value.total %}<strong>{{ '%.1f'|format(100 * value.wins / value.total) }}%</strong><span class="muted">{{ value.wins }}/{{ value.total }}</span>{% else %}<strong>—</strong><span class="muted">no recorded opportunities</span>{% endif %}</dd></div>
+{% endmacro %}
+{% macro number(label, value) %}
+<div class="stat-card"><dt>{{ label }}</dt><dd><strong>{{ value }}</strong></dd></div>
+{% endmacro %}
+{% block content %}
+<h2>Stats</h2>
+<nav aria-label="Stats tabs">
+  <a href="{{ url_for('stats') }}" {% if section == 'overall' %}aria-current="page"{% endif %}>Overall Stats</a>
+  <a href="{{ url_for('stats', section='player') }}" {% if section == 'player' %}aria-current="page"{% endif %}>Player Stats</a>
+</nav>
+{% if section == 'overall' %}
+<h3>Overall Stats</h3>
+<dl class="stats-grid">
+{{ number('Matches played', stats.overall.matches) }}
+{{ number('Points made', stats.overall.points) }}
+{{ rate('Server winrate', stats.overall.server) }}
+{{ rate('Match-point holder winrate', stats.overall.match_point) }}
+<div class="stat-card"><dt>Median Elo</dt><dd><strong>{{ '%.2f'|format(stats.median_elo) if stats.median_elo is not none else '—' }}</strong></dd></div>
+</dl>
+{% else %}
+<h3>Player Stats</h3>
+<form method="get" action="{{ url_for('stats') }}" class="row" data-stats-form>
+<input type="hidden" name="section" value="player">
+<label>Player<select name="player"><option value="">Choose a player</option>{% for p in players %}<option value="{{ p.id }}" {% if p.id == player_id %}selected{% endif %}>{{ p.name }}{{ ' (retired)' if not p.active else '' }}</option>{% endfor %}</select></label>
+</form>
+{% if player_id %}
+<h3>{{ names[player_id] }}</h3>
+{% set personal = stats.personal[player_id] %}
+<dl class="stats-grid">
+<div class="stat-card elo-card"><dt>Elo</dt><dd><strong>{{ '%.2f'|format(personal.elo) }}</strong><span class="stat-rank">{% if personal.rank %}Rank {{ personal.rank }}{% if personal.rank in [1, 2, 3] %} <span role="img" aria-label="{{ ['Gold', 'Silver', 'Bronze'][personal.rank - 1] }} medal">{{ ['🥇', '🥈', '🥉'][personal.rank - 1] }}</span>{% endif %}{% else %}Unranked{% endif %}</span></dd></div>
+{{ number('Matches', personal.matches) }}
+{{ rate('Match winrate', dict(wins=personal.wins, total=personal.matches)) }}
+{{ number('Points for', personal.scored) }}
+{{ number('Points against', personal.conceded) }}
+{{ number('Point difference', personal.pd) }}
+{{ number('Net Points', '%.2f'|format(personal.net_points) if personal.net_points is not none else '—') }}
+{{ number('SRS', '%.2f'|format(personal.srs) if personal.srs is not none else '—') }}
+{{ number('Performance above expectation', ('%+.1f pp'|format(personal.performance)) if personal.performance is not none else '—') }}
+{{ rate('Server winrate', personal.server) }}
+{{ rate('Match points converted (pro)', personal.match_point) }}
+{{ rate('Match points saved (against)', personal.against) }}
+</dl>
+<form method="get" action="{{ url_for('stats') }}" class="row" data-stats-form>
+<input type="hidden" name="section" value="player">
+<input type="hidden" name="player" value="{{ player_id }}">
+<label>Compare with<select name="opponent"><option value="">Choose an opponent (optional)</option>{% for p in players if p.id != player_id %}<option value="{{ p.id }}" {% if p.id == opponent_id %}selected{% endif %}>{{ p.name }}{{ ' (retired)' if not p.active else '' }}</option>{% endfor %}</select></label>
+</form>
+{% if opponent_id %}
+<h3>{{ names[player_id] }} vs {{ names[opponent_id] }}</h3>
+<dl class="stats-grid">
+{{ number('Matches played', duel_count) }}
+{{ number('Points for', duel[player_id].scored) }}
+{{ number('Points against', duel[player_id].conceded) }}
+{{ rate('Match winrate', dict(wins=duel[player_id].wins, total=duel[player_id].matches)) }}
+{{ rate('Server winrate', duel[player_id].server) }}
+{{ rate('Match points converted (pro)', duel[player_id].match_point) }}
+{{ rate('Match points saved (against)', duel[player_id].against) }}
+</dl>
+{% endif %}
+{% else %}<p>Select a player to see their stats.</p>{% endif %}
+{% endif %}
+{% endblock %}

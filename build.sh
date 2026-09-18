@@ -1,16 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-build_dir="$(mktemp -d "${TMPDIR:-/tmp}/ping-pong-build.XXXXXX")"
-trap 'rm -rf -- "$build_dir"' EXIT
-export PIP_CACHE_DIR="$build_dir/pip-cache"
-export PYINSTALLER_CONFIG_DIR="$build_dir/pyinstaller-cache"
-python3 -m venv "$build_dir/venv"
-"$build_dir/venv/bin/python" -m pip install -r "$project_dir/requirements.txt" 'pyinstaller>=6.16,<7'
-"$build_dir/venv/bin/python" -m PyInstaller --clean --noconfirm --onefile \
-    --name ping-pong --distpath "$build_dir/dist" --workpath "$build_dir/work" \
-    --specpath "$build_dir" "$project_dir/app.py"
-# Replace the release only after a successful build, without truncating a running binary.
-install -m 755 "$build_dir/dist/ping-pong" "$project_dir/.ping-pong.new"
-mv -f -- "$project_dir/.ping-pong.new" "$project_dir/ping-pong"
-printf 'Built %s/ping-pong\n' "$project_dir"
+
+if ! command -v docker >/dev/null 2>&1; then
+    printf 'Docker is required. Install Docker and the Docker Compose plugin, then retry.\n' >&2
+    exit 1
+fi
+if ! docker compose version >/dev/null 2>&1; then
+    printf 'The Docker Compose plugin is required (docker compose).\n' >&2
+    exit 1
+fi
+if ! docker info >/dev/null 2>&1; then
+    printf 'Cannot access Docker. Start the Docker daemon and check your Docker permissions.\n' >&2
+    exit 1
+fi
+
+cd -- "$project_dir"
+printf '%s\n' \
+    'Building and starting both local servers:' \
+    '  Main: http://localhost:8080/ — data/' \
+    '  Test: http://localhost:8081/ — test_data/' \
+    'Logs appear below. Press Ctrl+C to stop both servers.' \
+    'Ports 8080 and 8081 must be free of standalone servers.'
+exec docker compose -f "$project_dir/compose.yaml" up --build --abort-on-container-exit

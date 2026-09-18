@@ -1,0 +1,2 @@
+{% extends 'base.html' %}
+{% block content %}<h2>Could not complete operation</h2><p role="alert">{{ message }}</p><p><a class="button" href="{{ request.script_root }}{{ request.path }}">Refresh page</a> <button type="button" id="go-back">Go back</button></p><p class="muted">Refresh before retrying a stale score. Check match history before repeating a save after a connection error.</p>{% endblock %}

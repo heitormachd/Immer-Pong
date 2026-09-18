@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import csrf, hidden with context %}
+{% block content %}
+<h2>Players</h2>
+<form method="post" class="row">{{ csrf() }}{{ hidden('action', 'add') }}<label>New player<input name="name" required></label><button>Add</button></form>
+<div class="table-scroll"><table><thead><tr><th>Player</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+{% for p in players %}<tr><td>{{ p.name }}</td><td>{{ 'Active' if p.active else 'Retired' }}</td><td class="actions">
+<form method="post" class="inline">{{ csrf() }}{{ hidden('action', 'rename') }}{{ hidden('player_id', p.id) }}<input name="name" value="{{ p.name }}" aria-label="Rename {{ p.name }}" required><button>Rename</button></form>
+<form method="post" {% if p.active %}data-confirm="Retire this player? Their match history will be kept."{% endif %}>{{ csrf() }}{{ hidden('action', 'retire' if p.active else 'restore') }}{{ hidden('player_id', p.id) }}<button>{{ 'Retire…' if p.active else 'Restore' }}</button></form>
+</td></tr>{% else %}<tr><td colspan="3" class="empty">No players yet.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

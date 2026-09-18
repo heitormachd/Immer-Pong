@@ -1,0 +1,11 @@
+*
+!requirements.txt
+!web.py
+!storage.py
+!ranking.py
+!live_scoring.py
+!tournaments.py
+!templates/
+!templates/**
+!static/
+!static/**

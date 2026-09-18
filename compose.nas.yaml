@@ -1,0 +1,36 @@
+# Standalone QNAP Container Station application: create with the name immer-ping.
+# Update on NAS: sudo docker compose -p immer-ping -f compose.nas.yaml up -d --build
+# Builds the Dockerfile directly on the NAS; no image import is needed.
+# Uses the expected QNAP /share/storage_das1 path; confirm this exists on the NAS.
+# This folder must contain Dockerfile, application sources, data/, and test_data/.
+# Main: http://192.168.88.131:18080/immer-pong/
+# Test: http://192.168.88.131:18081/ping-pong-test/
+services:
+  ping-pong:
+    build:
+      context: /share/storage_das1/heitor/ping-pong
+      dockerfile: Dockerfile
+    ports:
+      - "18080:8080"
+    volumes:
+      - type: bind
+        source: /share/storage_das1/heitor/ping-pong/data
+        target: /app/data
+        bind:
+          create_host_path: false
+    command: ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "1", "--access-logfile", "-", "web:create_app(url_prefix='/immer-pong')"]
+    restart: unless-stopped
+  ping-pong-test:
+    build:
+      context: /share/storage_das1/heitor/ping-pong
+      dockerfile: Dockerfile
+    ports:
+      - "18081:8080"
+    volumes:
+      - type: bind
+        source: /share/storage_das1/heitor/ping-pong/test_data
+        target: /app/test_data
+        bind:
+          create_host_path: false
+    command: ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "1", "--access-logfile", "-", "web:create_app('test_data', url_prefix='/ping-pong-test')"]
+    restart: unless-stopped

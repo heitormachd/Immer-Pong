@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import csrf, hidden, player_select, time, elo_cell with context %}
+{% block content %}
+<h2>Matches</h2>
+<details class="box" {% if not matches %}open{% endif %}><summary>Create match</summary>
+<form method="post" class="row match-form" data-match-form>
+  {{ csrf() }}{{ hidden('action', 'create_live') }}
+  {{ player_select('player1', 'Player 1', active) }}
+  <label class="match-final-score" data-final-score hidden>Points<input type="number" name="score1" min="0" max="2147483647" value="0" required disabled></label>
+  {{ player_select('player2', 'Player 2', active) }}
+  <label class="match-final-score" data-final-score hidden>Points<input type="number" name="score2" min="0" max="2147483647" value="0" required disabled></label>
+  <label data-live-target>Target<input type="number" name="target" min="2" value="7" required></label>
+  <div class="match-controls">
+  <button type="submit" data-match-submit {% if active|length < 2 %}disabled{% endif %}>Create match</button>
+  <label class="mode-toggle"><input type="checkbox" id="final-result-toggle" name="final_result" value="1"> Enter final result</label>
+  </div>
+</form>
+{% if active|length < 2 %}<p>Add at least two active players in Players to start a match.</p>{% endif %}
+</details>
+{% set ongoing = matches|selectattr('status', 'equalto', 'in_progress')|list %}
+{% if ongoing %}<h2>In progress</h2><ul class="match-list">{% for m in ongoing %}<li><a href="{{ url_for('live', match_id=m.id) }}">{{ names[m.player1] }} {{ m.score1 }} – {{ m.score2 }} {{ names[m.player2] }}</a> · Target {{ m.target_points }} · Resume / review</li>{% endfor %}</ul>{% endif %}
+<h2>Match history</h2>
+<div class="table-scroll"><table>
+<thead><tr><th>Time</th><th>Player 1</th><th>P1 Elo</th><th>Points</th><th>Player 2</th><th>P2 Elo</th><th>Tournament</th><th>Actions</th></tr></thead>
+<tbody>{% for m in matches|reverse if m.status == 'completed' %}
+<tr><td>{{ time(m.timestamp) }}</td><td>{{ names[m.player1] }}</td><td class="number">{{ elo_cell(elo[m.id].player1) }}</td><td class="number">{{ m.score1 }} – {{ m.score2 }}</td><td>{{ names[m.player2] }}</td><td class="number">{{ elo_cell(elo[m.id].player2) }}</td><td>{{ tournament_names.get(m.tournament_id, '—') }}</td>
+<td class="actions">{% if m.target_points %}<a href="{{ url_for('live', match_id=m.id) }}">Point history / review</a>{% endif %}
+<form method="post" data-confirm="Delete this match? Its result and any point history will be removed, and Elo recalculated.">{{ csrf() }}{{ hidden('action', 'delete') }}{{ hidden('match_id', m.id) }}<button>Delete…</button></form></td></tr>
+{% else %}<tr><td colspan="8" class="empty">No completed matches yet.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}
