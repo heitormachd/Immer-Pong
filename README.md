@@ -48,8 +48,8 @@ Compose starts two independent services:
 | Main | http://localhost:8080/ | `data/` | http://192.168.88.131/immer-pong/ |
 | Test | http://localhost:8081/ | `test_data/` | http://192.168.88.131/ping-pong-test/ |
 
-`test_data/` was seeded with a snapshot of the existing tables. It is a separate
-copy: test edits never sync back to `data/`. Test CSV files are ignored by Git;
+`test_data/` contains fictional players, sample results, an in-progress live match,
+and a demo tournament. It uses no office records; test edits never sync back to `data/`. Test CSV files are ignored by Git;
 copy them separately when deploying. If empty, a service starts with no players
 or matches. The test interface is marked **Test server**. Cookies are separate,
 so switching between ports does not invalidate the other service's forms.
