@@ -89,10 +89,12 @@ details > .table-scroll { margin-top: 16px; margin-bottom: 0; }
 @media (max-width: 400px) { .match-controls { gap: 8px; } .match-controls button { padding-inline: 8px; } }
 
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 200px)); gap: 12px; margin: 16px 0 24px; }
+.player-stats-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); max-width: 1050px; margin-inline: auto; }
 .stat-card { aspect-ratio: 1; padding: 16px; border: 1px solid #666666; background: #222222; display: flex; flex-direction: column; justify-content: center; gap: 16px; text-align: center; }
 .stat-card dt { font-weight: 600; }
 .stat-card dd { margin: 0; display: flex; flex-direction: column; gap: 8px; font-variant-numeric: tabular-nums; }
 .stat-card strong { font-size: 28px; }
+@media (max-width: 900px) { .player-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .match-score-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr); align-items: center; gap: 16px; max-width: 800px; margin: auto; }
 .match-score-layout .scoreboard { width: 100%; min-width: 0; }

@@ -68,7 +68,7 @@ class WebTests(unittest.TestCase):
         self.assertIn('66.7%', page.text)
         self.assertIn('Points for', page.text)
         self.assertIn('Points against', page.text)
-        self.assertIn('Performance above expectation', page.text)
+        self.assertIn('Performance expectation', page.text)
         self.assertIn('<dt>Clutch</dt>', page.text)
         self.assertIn('no complete point histories', page.text)
         self.assertNotIn('<th>Time</th>', page.text)

@@ -15,7 +15,7 @@
 <h3>Overall Stats</h3>
 <dl class="stats-grid">
 {{ number('Matches played', stats.overall.matches) }}
-{{ number('Points made', stats.overall.points) }}
+{{ number('Points played', stats.overall.points) }}
 {{ rate('Points won on serve', stats.overall.server) }}
 {{ rate('Match-point holder winrate', stats.overall.match_point) }}
 <div class="stat-card"><dt>Median Elo</dt><dd><strong>{{ '%.2f'|format(stats.median_elo) if stats.median_elo is not none else '—' }}</strong></dd></div>
@@ -38,16 +38,13 @@
 {% endif %}
 
 {% set personal = stats.personal[player_id] %}
-<dl class="stats-grid">
+<dl class="stats-grid player-stats-grid">
 <div class="stat-card elo-card"><dt>Elo</dt><dd><strong>{{ '%.2f'|format(personal.elo) }}</strong><span class="stat-rank">{% if personal.rank %}Rank {{ personal.rank }}{% if personal.rank in [1, 2, 3] %} <span role="img" aria-label="{{ ['Gold', 'Silver', 'Bronze'][personal.rank - 1] }} medal">{{ ['🥇', '🥈', '🥉'][personal.rank - 1] }}</span>{% endif %}{% else %}Unranked{% endif %}</span></dd></div>
-{{ number('Matches', personal.matches) }}
 {{ rate('Match winrate', dict(wins=personal.wins, total=personal.matches)) }}
-{{ number('Points for', personal.scored) }}
-{{ number('Points against', personal.conceded) }}
-{{ number('Point difference', personal.pd) }}
+{{ rate('Points winrate', dict(wins=personal.scored, total=personal.scored + personal.conceded)) }}
 {{ number('Net Points', '%.2f'|format(personal.net_points) if personal.net_points is not none else '—') }}
 {{ number('SRS', '%.2f'|format(personal.srs) if personal.srs is not none else '—') }}
-{{ number('Performance above expectation', ('%+.1f pp'|format(personal.performance)) if personal.performance is not none else '—') }}
+{{ number('Performance expectation', ('%+.1f pp'|format(personal.performance)) if personal.performance is not none else '—') }}
 <div class="stat-card"><dt>Clutch</dt><dd>{% if personal.clutch is not none %}<strong>{{ '%+.1f pp'|format(personal.clutch) }}</strong>{% else %}<strong>—</strong><span class="muted">no complete point histories</span>{% endif %}</dd></div>
 {{ rate('Points won on serve', personal.server) }}
 {{ rate('Match points converted (pro)', personal.match_point) }}

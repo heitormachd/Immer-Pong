@@ -300,7 +300,7 @@ leave upgraded tables unchanged. Stop older app instances before upgrading; thei
 CSV reader does not understand the new columns.
 
 Stats shows median Elo for players with at least two completed matches (including
-retired players). Player performance above expectation is
+retired players). Player performance expectation is
 `100 × average(actual result − pre-match Elo win probability)`, in percentage
 points; positive means more wins than predicted. Match totals and points include
 all completed results, while serving and clutch rates require point histories.
