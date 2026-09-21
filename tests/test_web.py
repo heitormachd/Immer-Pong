@@ -233,6 +233,97 @@ class WebTests(unittest.TestCase):
             self.assertFalse(tournament_state(tournament, self.store.snapshot()[1])['complete'])
             self.assertEqual(self.client.get('/tournaments').status_code, 200)
 
+    def test_major_titles_only_awarded_to_champion_and_removed_on_undo(self):
+        a, b = self.ids[:2]
+        for classification in ('minor', 'major'):
+            response = self.post('/tournaments', name=f'{classification} title', system='single',
+                                 participants=[a, b], classification=classification, badge='star')
+            self.assertEqual(response.status_code, 303)
+            event = self.store.snapshot()[2][-1]
+            self.assertEqual((event['classification'], event['badge']), (classification, 'star' if classification == 'major' else ''))
+            self.assertNotIn('class="achievement"', self.client.get(
+                '/stats', query_string=dict(section='player', player=a)).text)
+            fixture = tournament_state(event, [])['fixtures'][0]
+            self.store.register_tournament_match(event['id'], fixture['id'], 7, 2,
+                                                  (fixture['player1'], fixture['player2']))
+            winner, loser = fixture['player1'], fixture['player2']
+            page = self.client.get('/stats', query_string=dict(section='player', player=winner)).text
+            self.assertEqual('class="achievement"' in page, classification == 'major')
+            self.assertNotIn('class="achievement"', self.client.get(
+                '/stats', query_string=dict(section='player', player=loser)).text)
+            if classification == 'major':
+                self.assertIn(f'href="{response.location}"', page)
+                self.assertIn('/static/badges/star.svg', page)
+                self.store.delete_match(self.store.snapshot()[1][-1]['id'])
+                self.assertNotIn('class="achievement"', self.client.get(
+                    '/stats', query_string=dict(section='player', player=winner)).text)
+
+    def test_minor_ignores_badge_and_upload_and_displays_no_badge(self):
+        from io import BytesIO
+        response = self.post('/tournaments', name='Minor without badge', system='single',
+                             participants=self.ids[:2], classification='minor', badge='shield',
+                             image=(BytesIO(b'ignored image'), 'upload.png'))
+        self.assertEqual(response.status_code, 303)
+        event = self.store.snapshot()[2][-1]
+        self.assertEqual(event['badge'], '')
+        self.assertFalse((Path(self.temp.name) / 'badges').exists())
+        self.assertNotIn('<img', self.client.get(response.location).text)
+        page = self.client.get('/tournaments').text
+        row = next(row for row in page.split('<tr>') if 'Minor without badge' in row)
+        self.assertNotIn('<img', row.split('</tr>')[0])
+        fixture = tournament_state(event, [])['fixtures'][0]
+        self.store.register_tournament_match(event['id'], fixture['id'], 7, 0,
+                                             (fixture['player1'], fixture['player2']))
+        page = self.client.get('/tournaments').text
+        row = next(row for row in page.split('<tr>') if 'Minor without badge' in row)
+        self.assertNotIn('<img', row.split('</tr>')[0])
+
+    def test_badge_upload_is_normalized_persisted_and_served(self):
+        from io import BytesIO
+        from PIL import Image
+        image = BytesIO()
+        Image.new('RGB', (900, 600), 'blue').save(image, 'JPEG')
+        image.seek(0)
+        response = self.post('/tournaments', name='Custom cup', system='single',
+                             participants=self.ids[:2], classification='major', badge='cup',
+                             image=(image, '../../custom.jpg'))
+        self.assertEqual(response.status_code, 303, response.text)
+        event = self.store.snapshot()[2][-1]
+        self.assertTrue(event['badge'].endswith('.png'))
+        page = self.client.get(response.location)
+        self.assertIn('/badges/' + event['badge'], page.text)
+        asset = self.client.get('/badges/' + event['badge'])
+        self.assertEqual(asset.mimetype, 'image/png')
+        with Image.open(BytesIO(asset.data)) as normalized:
+            self.assertEqual(normalized.size, (512, 341))
+        asset.close()
+        restarted = create_app(self.temp.name).test_client()
+        asset = restarted.get('/badges/' + event['badge'])
+        self.assertEqual(asset.status_code, 200)
+        asset.close()
+
+    def test_invalid_badges_and_uploads_do_not_create_tournaments(self):
+        from io import BytesIO
+        from PIL import Image
+        before = self.ledger()
+        for extra in (dict(classification='legend'), dict(classification='major', badge='../invalid'),
+                      dict(classification='major', image=(BytesIO(b'<svg></svg>'), 'fake.png')),
+                      dict(classification='major', image=(BytesIO(b'x' * (5 * 1024 * 1024 + 1)), 'large.png'))):
+            response = self.post('/tournaments', name='Bad cup', system='single',
+                                 participants=self.ids[:2], **extra)
+            self.assertEqual(response.status_code, 409, response.text)
+            self.assertEqual(before, self.ledger())
+        image = BytesIO()
+        Image.new('RGB', (10, 10)).save(image, 'PNG')
+        image.seek(0)
+        response = self.post('/tournaments', name='', system='single',
+                             participants=self.ids[:2], classification='major', image=(image, 'valid.png'))
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(list((Path(self.temp.name) / 'badges').glob('*')), [])
+        response = self.post('/tournaments', image=(BytesIO(b'x' * (6 * 1024 * 1024)), 'huge.png'))
+        self.assertEqual(response.status_code, 413)
+        self.assertEqual(before, self.ledger())
+
     def test_wrong_tournament_undo_cannot_delete_ordinary_match(self):
         self.store.register(self.ids[0], self.ids[1], 7, 0)
         match = self.store.snapshot()[1][-1]

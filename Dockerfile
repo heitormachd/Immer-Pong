@@ -5,7 +5,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && groupadd --gid 1000 pingpong \
     && useradd --uid 1000 --gid pingpong --no-create-home pingpong \
     && mkdir /app/data && chown pingpong:pingpong /app/data
-COPY web.py storage.py ranking.py live_scoring.py tournaments.py ./
+COPY web.py storage.py ranking.py live_scoring.py tournaments.py badges.py ./
 COPY templates ./templates
 COPY static ./static
 USER pingpong

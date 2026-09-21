@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from tournaments import SYSTEMS, tournament_state
+from badges import valid_badge
 from live_scoring import live_state
 from ranking import rebuild_match_elos
 
@@ -27,7 +28,7 @@ class Store:
     TOURNAMENT_MATCH_FIELDS = (*LEGACY_MATCH_FIELDS, 'tournament_id', 'fixture_id')
     LIVE_MATCH_FIELDS = (*TOURNAMENT_MATCH_FIELDS, 'target_points', 'point_log', 'status', 'revision')
     MATCH_FIELDS = (*LIVE_MATCH_FIELDS, 'elo1_before', 'elo2_before')
-    TOURNAMENT_FIELDS = ('id', 'name', 'system', 'created_at', 'players', 'groups')
+    TOURNAMENT_FIELDS = ('id', 'name', 'system', 'created_at', 'players', 'groups', 'classification', 'badge')
 
     def __init__(self, directory):
         self.directory = Path(directory)
@@ -90,6 +91,7 @@ class Store:
                 tournament['players'] = json.loads(tournament['players'])
                 tournament['groups'] = int(tournament['groups'])
                 participants = tournament['players']
+                self._validate_identity(tournament['classification'], tournament['badge'])
                 if (not tournament['id'] or tournament['id'] in tournament_ids
                         or not tournament['name'].strip()
                         or not isinstance(participants, list)
@@ -284,11 +286,24 @@ class Store:
         elif groups != 1:
             raise StoreError('This system does not use multiple groups.')
 
-    def create_tournament(self, name, system, participants, groups=1):
+    @staticmethod
+    def _validate_identity(classification, badge):
+        if classification not in ('minor', 'major'):
+            raise StoreError('Choose Minor or Major.')
+        if classification == 'minor' and badge != '':
+            raise StoreError('Minor tournaments cannot have badges.')
+        if classification == 'major' and not valid_badge(badge):
+            raise StoreError('Choose a valid tournament badge.')
+
+    def create_tournament(self, name, system, participants, groups=1,
+                          classification='minor', badge='cup'):
         name = name.strip()
         if not name:
             raise StoreError('Enter a tournament name.')
         self._validate_tournament(system, participants, groups)
+        if classification == 'minor':
+            badge = ''
+        self._validate_identity(classification, badge)
         with self._locked():
             players, matches, tournaments = self._load()
             if any(not self._player(players, p)['active'] for p in participants):
@@ -297,7 +312,7 @@ class Store:
             random.SystemRandom().shuffle(seeds)
             tournaments.append(dict(id=uuid.uuid4().hex, name=name, system=system,
                                     created_at=datetime.now(timezone.utc).isoformat(),
-                                    players=seeds, groups=groups))
+                                    players=seeds, groups=groups, classification=classification, badge=badge))
             self._write('tournaments.csv', self.TOURNAMENT_FIELDS, tournaments)
             return players, matches, tournaments
 

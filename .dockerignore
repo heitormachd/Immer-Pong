@@ -5,6 +5,7 @@
 !ranking.py
 !live_scoring.py
 !tournaments.py
+!badges.py
 !templates/
 !templates/**
 !static/

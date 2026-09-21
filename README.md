@@ -339,3 +339,20 @@ completion/history/reopening, legacy CSV compatibility, failed writes, and
 concurrent submissions (including duplicate tournament results). A second
 physical browser client and the QNAP container deployment still need validation
 before rollout.
+
+### Tournament badges and titles
+
+Tournament creation offers Minor and Major classifications and three trophy badges.
+You can replace the selected trophy with a PNG, JPEG, or WebP image (up to 5 MB
+and 16 million pixels). Uploaded badges are normalized to PNG, resized to fit
+512 × 512 pixels, and stored in the selected data directory's `badges/` folder;
+include that folder when backing up or moving the ledger.
+
+Only the winner of a completed Major earns an achievement in Player Stats.
+Clicking the badge opens that tournament's bracket and results. Undoing the
+result that decided the title removes the achievement until the tournament
+finishes again. Minor matches still contribute to normal match statistics.
+
+Tournament CSV rows include `classification` (`minor` or `major`) and `badge`
+(empty for Minors; `cup`, `shield`, `star`, or an uploaded PNG filename for Majors). There is no migration
+for older tournament rows during development.

@@ -2,8 +2,8 @@
 {% from 'macros.html' import csrf, hidden with context %}
 {% block content %}
 <a href="{{ url_for('tournaments') }}">← Tournaments</a>
-<h2>{{ event.name }}</h2>
-<p>{{ systems[event.system] }} · {{ event.players|length }} players · {{ state.phase }}{% if state.champion %} · <b>Winner: {{ names[state.champion] }}</b>{% endif %}</p>
+<h2 class="tournament-heading">{% if event.classification == 'major' %}<img class="tournament-badge" src="{{ badge_url(event.badge) }}" alt="Tournament badge">{% endif %}{{ event.name }}</h2>
+<p>{{ event.classification|title }} · {{ systems[event.system] }} · {{ event.players|length }} players · {{ state.phase }}{% if state.champion %} · <b>Winner: {{ names[state.champion] }}</b>{% endif %}</p>
 {% if live_fixture or next_fixture %}
 <section class="next-match" id="next-match">
 <div class="next-match-label">{{ 'Current match' if live_fixture else 'Next match' }}</div>

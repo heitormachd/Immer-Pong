@@ -27,7 +27,16 @@
 <label>Player<select name="player"><option value="">Choose a player</option>{% for p in players %}<option value="{{ p.id }}" {% if p.id == player_id %}selected{% endif %}>{{ p.name }}{{ ' (retired)' if not p.active else '' }}</option>{% endfor %}</select></label>
 </form>
 {% if player_id %}
-<h3>{{ names[player_id] }}</h3>
+{% if achievements %}
+<h3 id="achievements-title">Achievements</h3>
+<section class="box" aria-labelledby="achievements-title">
+<div class="achievements">{% for t in achievements %}
+<a class="achievement" href="{{ url_for('tournament', tournament_id=t.id) }}" aria-label="{{ t.name }} — Major champion. View tournament history">
+<img class="tournament-badge" src="{{ badge_url(t.badge) }}" alt=""><strong>{{ t.name }}</strong><span class="muted">Major champion</span></a>
+{% endfor %}</div>
+</section>
+{% endif %}
+
 {% set personal = stats.personal[player_id] %}
 <dl class="stats-grid">
 <div class="stat-card elo-card"><dt>Elo</dt><dd><strong>{{ '%.2f'|format(personal.elo) }}</strong><span class="stat-rank">{% if personal.rank %}Rank {{ personal.rank }}{% if personal.rank in [1, 2, 3] %} <span role="img" aria-label="{{ ['Gold', 'Silver', 'Bronze'][personal.rank - 1] }} medal">{{ ['🥇', '🥈', '🥉'][personal.rank - 1] }}</span>{% endif %}{% else %}Unranked{% endif %}</span></dd></div>
@@ -43,6 +52,7 @@
 {{ rate('Match points converted (pro)', personal.match_point) }}
 {{ rate('Match points saved (against)', personal.against) }}
 </dl>
+
 <form method="get" action="{{ url_for('stats') }}" class="row" data-stats-form>
 <input type="hidden" name="section" value="player">
 <input type="hidden" name="player" value="{{ player_id }}">

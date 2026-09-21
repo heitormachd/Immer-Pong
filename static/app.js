@@ -53,3 +53,15 @@ if (system) {
 document.querySelectorAll('[data-stats-form] select').forEach(select => {
   select.addEventListener('change', () => select.form.requestSubmit());
 });
+
+const classification = document.querySelector('#classification');
+if (classification) {
+  const badgeOptions = document.querySelector('#tournament-badge-options');
+  const updateBadgeOptions = () => {
+    const isMajor = classification.value === 'major';
+    badgeOptions.hidden = !isMajor;
+    badgeOptions.disabled = !isMajor;
+  };
+  classification.addEventListener('change', updateBadgeOptions);
+  updateBadgeOptions();
+}

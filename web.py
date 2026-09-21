@@ -4,11 +4,12 @@ from pathlib import Path
 import secrets
 import hashlib
 
-from flask import Flask, abort, redirect, render_template, request, session, url_for
+from flask import Flask, abort, redirect, render_template, request, session, url_for, send_from_directory
 
 from werkzeug.exceptions import NotFound
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
+from badges import BADGES, MAX_UPLOAD, save_badge, valid_badge
 from live_scoring import live_state
 from ranking import database_stats, match_elo_estimates, match_elo_history, standings
 from storage import Store, StoreError
@@ -26,7 +27,7 @@ def create_app(data_directory=None, url_prefix=""):
     # One worker is intentional: serialize this small app's CSV operations.
     # Restarting the service expires open forms; refreshing creates a new token.
     app.config.update(SECRET_KEY=secrets.token_hex(32), SESSION_COOKIE_SAMESITE='Lax',
-                      MAX_CONTENT_LENGTH=64 * 1024)
+                      MAX_CONTENT_LENGTH=MAX_UPLOAD + 64 * 1024)
     app.config.update(
         SESSION_COOKIE_NAME='pingpong_' + hashlib.sha256(str(directory).encode()).hexdigest()[:12],
         SESSION_COOKIE_PATH=prefix + '/',
@@ -53,11 +54,22 @@ def create_app(data_directory=None, url_prefix=""):
             "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
         return response
 
+    @app.template_global()
+    def badge_url(badge):
+        return (url_for('static', filename=f'badges/{badge}.svg') if badge in BADGES
+                else url_for('uploaded_badge', filename=badge))
+
+    @app.get('/badges/<filename>')
+    def uploaded_badge(filename):
+        if not valid_badge(filename) or filename in BADGES:
+            abort(404)
+        return send_from_directory(directory / 'badges', filename, mimetype='image/png')
+
     def context():
         players, matches, tournaments = store.snapshot()
         return dict(players=sorted(players, key=lambda p: p['name'].casefold()),
                     matches=matches, tournaments=tournaments,
-                    names={p['id']: p['name'] for p in players}, systems=SYSTEMS,
+                    names={p['id']: p['name'] for p in players}, systems=SYSTEMS, badges=BADGES,
                     active=sorted((p for p in players if p['active']), key=lambda p: p['name'].casefold()))
 
     def integer(name):
@@ -79,6 +91,7 @@ def create_app(data_directory=None, url_prefix=""):
         return render('error.html', '', message='Could not access the shared data. Refresh and check '
                       'history before retrying: a save may have succeeded.'), 503
 
+    @app.errorhandler(413)
     @app.errorhandler(400)
     @app.errorhandler(404)
     def request_error(error):
@@ -145,6 +158,9 @@ def create_app(data_directory=None, url_prefix=""):
         return render('stats.html', 'stats', **data,
                       stats=database_stats(data['players'], data['matches']), section=section,
                       player_id=player_id, opponent_id=opponent_id,
+                      achievements=[t for t in reversed(data['tournaments'])
+                                    if player_id and t['classification'] == 'major'
+                                    and tournament_state(t, data['matches'])['champion'] == player_id],
                       duel=database_stats(data['players'], duel_matches)['personal']
                       if opponent_id else None, duel_count=len(duel_matches))
 
@@ -179,9 +195,29 @@ def create_app(data_directory=None, url_prefix=""):
     def tournaments():
         if request.method == 'POST':
             system = request.form.get('system')
-            _, _, rows = store.create_tournament(request.form.get('name', ''), system,
-                                                 request.form.getlist('participants'),
-                                                 integer('groups') if system == 'group_double' else 1)
+            groups = integer('groups') if system == 'group_double' else 1
+            badge = request.form.get('badge', 'cup')
+            classification = request.form.get('classification', 'minor')
+            if classification == 'minor':
+                badge = ''
+            if classification == 'major' and badge not in BADGES:
+                raise StoreError('Choose a default tournament badge.')
+            uploaded = request.files.get('image')
+            saved = None
+            try:
+                if classification == 'major' and uploaded and uploaded.filename:
+                    try:
+                        saved = save_badge(uploaded, directory)
+                    except ValueError as exc:
+                        raise StoreError(str(exc)) from exc
+                    badge = saved
+                _, _, rows = store.create_tournament(
+                    request.form.get('name', ''), system, request.form.getlist('participants'),
+                    groups, classification=classification, badge=badge)
+            except StoreError:
+                if saved:
+                    (directory / 'badges' / saved).unlink(missing_ok=True)
+                raise
             return redirect(url_for('tournament', tournament_id=rows[-1]['id']), 303)
         data = context()
         return render('tournaments.html', 'tournaments', **data,

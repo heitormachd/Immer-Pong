@@ -5,18 +5,24 @@
 <section class="box ongoing-tournaments" aria-labelledby="ongoing-tournaments-title">
 <h2 id="ongoing-tournaments-title">Ongoing tournaments</h2>
 <div class="table-scroll"><table><thead><tr><th>Name</th><th>System</th><th>Status</th><th>Actions</th></tr></thead><tbody>
-{% for t in tournaments|reverse if not states[t.id].complete %}<tr><td><a href="{{ url_for('tournament', tournament_id=t.id) }}">{{ t.name }}</a></td><td>{{ systems[t.system] }}</td><td>{{ states[t.id].phase }}</td><td><a class="button" href="{{ url_for('tournament', tournament_id=t.id) }}">Open tournament</a></td></tr>{% else %}<tr><td colspan="4" class="empty">No ongoing tournaments.</td></tr>{% endfor %}
+{% for t in tournaments|reverse if not states[t.id].complete %}<tr><td><a href="{{ url_for('tournament', tournament_id=t.id) }}">{% if t.classification == 'major' %}<img class="tournament-badge small" src="{{ badge_url(t.badge) }}" alt="">{% endif %}{{ t.name }}</a> <span class="classification">{{ t.classification|title }}</span></td><td>{{ systems[t.system] }}</td><td>{{ states[t.id].phase }}</td><td><a class="button" href="{{ url_for('tournament', tournament_id=t.id) }}">Open tournament</a></td></tr>{% else %}<tr><td colspan="4" class="empty">No ongoing tournaments.</td></tr>{% endfor %}
 </tbody></table></div>
 </section>
 <details class="box" {% if not tournaments %}open{% endif %}><summary>Create tournament</summary>
-<form method="post">{{ csrf() }}
+<form method="post" enctype="multipart/form-data">{{ csrf() }}
 <div class="row"><label>Name<input name="name" required></label><label>System<select name="system" id="system">{% for key, label in systems.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select></label><label>Groups (group stage only)<input type="number" name="groups" id="groups" value="1" min="1" max="{{ [1, active|length // 2]|max }}" required></label></div>
+<label>Classification<select name="classification" id="classification" required><option value="minor">Minor</option><option value="major">Major</option></select></label>
+<p class="muted">Minor: play matches without a title achievement. Major: the winner earns a badge in Player Stats.</p>
+<fieldset id="tournament-badge-options" hidden disabled><legend>Tournament badge</legend><div class="badge-options">
+{% for key, label in badges.items() %}<label class="badge-option"><input type="radio" name="badge" value="{{ key }}" {% if loop.first %}checked{% endif %} required><img class="tournament-badge" src="{{ badge_url(key) }}" alt="">{{ label }}</label>{% endfor %}
+</div><label>Upload an image<input type="file" name="image" accept="image/png,image/jpeg,image/webp" aria-describedby="image-help"></label>
+<p class="muted" id="image-help">Optional PNG, JPEG, or WebP, up to 5 MB and 16 million pixels. An upload replaces the selected trophy.</p></fieldset>
 <fieldset><legend>Players</legend><div class="participants">{% for p in active %}<label><input type="checkbox" name="participants" value="{{ p.id }}">{{ p.name }}</label>{% else %}<p>Add active players first.</p>{% endfor %}</div></fieldset>
 <button {% if active|length < 2 %}disabled{% endif %}>Create tournament</button>
 </form></details>
 <details class="box"><summary>Tournament history</summary>
 <div class="table-scroll"><table><thead><tr><th>Name</th><th>System</th><th>Winner</th></tr></thead><tbody>
-{% for t in tournaments|reverse if states[t.id].complete %}<tr><td><a href="{{ url_for('tournament', tournament_id=t.id) }}">{{ t.name }}</a></td><td>{{ systems[t.system] }}</td><td>{{ names.get(states[t.id].champion, '—') }}</td></tr>{% else %}<tr><td colspan="3" class="empty">No completed tournaments yet.</td></tr>{% endfor %}
+{% for t in tournaments|reverse if states[t.id].complete %}<tr><td><a href="{{ url_for('tournament', tournament_id=t.id) }}">{% if t.classification == 'major' %}<img class="tournament-badge small" src="{{ badge_url(t.badge) }}" alt="">{% endif %}{{ t.name }}</a> <span class="classification">{{ t.classification|title }}</span></td><td>{{ systems[t.system] }}</td><td>{{ names.get(states[t.id].champion, '—') }}</td></tr>{% else %}<tr><td colspan="3" class="empty">No completed tournaments yet.</td></tr>{% endfor %}
 </tbody></table></div>
 </details>
 {% endblock %}
