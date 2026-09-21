@@ -16,7 +16,7 @@
 <dl class="stats-grid">
 {{ number('Matches played', stats.overall.matches) }}
 {{ number('Points made', stats.overall.points) }}
-{{ rate('Server winrate', stats.overall.server) }}
+{{ rate('Points won on serve', stats.overall.server) }}
 {{ rate('Match-point holder winrate', stats.overall.match_point) }}
 <div class="stat-card"><dt>Median Elo</dt><dd><strong>{{ '%.2f'|format(stats.median_elo) if stats.median_elo is not none else '—' }}</strong></dd></div>
 </dl>
@@ -48,7 +48,7 @@
 {{ number('Net Points', '%.2f'|format(personal.net_points) if personal.net_points is not none else '—') }}
 {{ number('SRS', '%.2f'|format(personal.srs) if personal.srs is not none else '—') }}
 {{ number('Performance above expectation', ('%+.1f pp'|format(personal.performance)) if personal.performance is not none else '—') }}
-{{ rate('Server winrate', personal.server) }}
+{{ rate('Points won on serve', personal.server) }}
 {{ rate('Match points converted (pro)', personal.match_point) }}
 {{ rate('Match points saved (against)', personal.against) }}
 </dl>
@@ -65,7 +65,7 @@
 {{ number('Points for', duel[player_id].scored) }}
 {{ number('Points against', duel[player_id].conceded) }}
 {{ rate('Match winrate', dict(wins=duel[player_id].wins, total=duel[player_id].matches)) }}
-{{ rate('Server winrate', duel[player_id].server) }}
+{{ rate('Points won on serve', duel[player_id].server) }}
 {{ rate('Match points converted (pro)', duel[player_id].match_point) }}
 {{ rate('Match points saved (against)', duel[player_id].against) }}
 </dl>
