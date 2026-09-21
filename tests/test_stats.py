@@ -1,6 +1,6 @@
 import unittest
 
-from ranking import database_stats, rebuild_match_elos, simple_ratings
+from ranking import database_stats, point_leverage, rebuild_match_elos, simple_ratings
 
 
 class StatsTests(unittest.TestCase):
@@ -33,6 +33,41 @@ class StatsTests(unittest.TestCase):
         result = database_stats([], [])
         self.assertIsNone(result['median_elo'])
         self.assertEqual((result['overall']['matches'], result['overall']['points']), (0, 0))
+
+    def test_clutch_leverage(self):
+        self.assertAlmostEqual(point_leverage(7, (1, 0)), 0.2255859375)
+        self.assertAlmostEqual(point_leverage(7, (6, 0)), 1 / 64)
+        self.assertEqual(point_leverage(7, (6, 5)), 0.5)
+        self.assertEqual(point_leverage(7, (9, 8), overtime=True), 0.5)
+
+    def test_clutch_weights_matches_and_opponents_are_symmetric(self):
+        match = self.match('baaa', target=3)
+        result = database_stats(self.players, [match])['personal']
+        # Weights: 3/8, 3/8, 1/2, 1/2; baseline: 3/4.
+        self.assertAlmostEqual(result['a']['clutch'], 100 / 28)
+        self.assertAlmostEqual(result['b']['clutch'], -100 / 28)
+        sweep = self.match('aaa', target=3)
+        sweep['id'] = 'sweep'
+        result = database_stats(self.players, [match, sweep])['personal']
+        # Sweep adds weight 1 and zero residual, not an equal match vote.
+        self.assertAlmostEqual(result['a']['clutch'], 100 / 44)
+        self.assertEqual(result['a']['clutch_matches'], 2)
+        self.assertIsNone(result['c']['clutch'])
+
+    def test_clutch_overtime_resets(self):
+        result = database_stats(self.players, [self.match('abababaa', target=3)])['personal']
+        self.assertAlmostEqual(result['a']['clutch'], 100 / 120)
+        self.assertEqual(result['a']['clutch_matches'], 1)
+
+    def test_clutch_excludes_missing_incomplete_and_mismatched_logs(self):
+        mismatch = self.match('aa')
+        mismatch['score1'] = 3
+        for match in (self.match('a', status='in_progress'), self.match('aa', target=None),
+                      self.match(''), self.match('a'), mismatch):
+            with self.subTest(match=match):
+                result = database_stats(self.players, [match])['personal']['a']
+                self.assertIsNone(result['clutch'])
+                self.assertEqual(result['clutch_matches'], 0)
 
     def test_totals_performance_and_median_use_completed_results(self):
         matches = [dict(id='1', player1='a', player2='b', score1=7, score2=2),

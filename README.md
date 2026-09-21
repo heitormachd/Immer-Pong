@@ -226,7 +226,7 @@ an abandoned or mistaken match and its point log.
 **Point history** shows the scorer, time, cumulative score, and overtime round
 for every recorded point. It is available in Live scoring and for completed
 matches in the history table. Final-result-only matches have no point sequence.
-No advanced clutch/player analytics are computed yet.
+Player Stats includes a Clutch score computed from complete point histories.
 
 ## Tournaments
 
@@ -305,6 +305,15 @@ retired players). Player performance above expectation is
 points; positive means more wins than predicted. Match totals and points include
 all completed results, while serving and clutch rates require point histories.
 Duel comparisons use only the selected pair's completed matches.
+
+Player Clutch is `100 × sum(L × (point won − match point win rate)) / sum(L)`,
+in percentage points. `L` is the difference in match win probability between
+winning and losing the next point, assuming future points are 50/50 and using
+the resetting overtime rules. Each match supplies its own baseline; aggregating
+points weights match scores by their total importance. Positive scores indicate
+better performance on important points relative to the player's overall play
+in those matches. Only completed logs that reproduce the final score count;
+small samples are provisional.
 
 All reads and writes acquire `.write-lock` in the selected data directory using
 exclusive directory creation.

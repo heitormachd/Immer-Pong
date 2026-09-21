@@ -69,6 +69,8 @@ class WebTests(unittest.TestCase):
         self.assertIn('Points for', page.text)
         self.assertIn('Points against', page.text)
         self.assertIn('Performance above expectation', page.text)
+        self.assertIn('<dt>Clutch</dt>', page.text)
+        self.assertIn('no complete point histories', page.text)
         self.assertNotIn('<th>Time</th>', page.text)
         self.assertIn('Bob (retired)', page.text)
         self.assertEqual(self.client.get('/stats?section=player').status_code, 200)
@@ -90,6 +92,17 @@ class WebTests(unittest.TestCase):
         self.assertIn('33.3%', duel)  # Alice wins 1 of 3 serves against Bob.
         self.assertIn('0/2', duel)  # Alice converts neither match point.
         self.assertNotIn('Bob in this duel', duel)
+
+    def test_player_clutch_displays_score(self):
+        a, b = self.ids[:2]
+        match = self.store.create_live_match(a, b, 3)[1][-1]
+        for revision, player in enumerate((b, a, a, a)):
+            self.store.score_live_match(match['id'], player, revision)
+        before = self.ledger()
+        page = self.client.get('/stats', query_string=dict(section='player', player=a))
+        self.assertEqual(page.status_code, 200)
+        self.assertIn('+3.6 pp', page.text)
+        self.assertEqual(before, self.ledger())
 
     def test_final_score_redirect_resets_form_and_updates_elo(self):
         response = self.post('/', action='register', player1=self.ids[0], player2=self.ids[1], score1=7, score2=3)

@@ -48,6 +48,7 @@
 {{ number('Net Points', '%.2f'|format(personal.net_points) if personal.net_points is not none else '—') }}
 {{ number('SRS', '%.2f'|format(personal.srs) if personal.srs is not none else '—') }}
 {{ number('Performance above expectation', ('%+.1f pp'|format(personal.performance)) if personal.performance is not none else '—') }}
+<div class="stat-card"><dt>Clutch</dt><dd>{% if personal.clutch is not none %}<strong>{{ '%+.1f pp'|format(personal.clutch) }}</strong>{% else %}<strong>—</strong><span class="muted">no complete point histories</span>{% endif %}</dd></div>
 {{ rate('Points won on serve', personal.server) }}
 {{ rate('Match points converted (pro)', personal.match_point) }}
 {{ rate('Match points saved (against)', personal.against) }}

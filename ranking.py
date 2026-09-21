@@ -1,6 +1,7 @@
 """Rebuild standings from the match ledger, in registration order."""
 
 from statistics import median
+from math import comb
 
 from live_scoring import live_state
 
@@ -79,6 +80,16 @@ def simple_ratings(players, matches):
     return ratings
 
 
+def point_leverage(target, scores, overtime=False):
+    """Win-probability swing for a fair next point under our overtime rules."""
+    if overtime:
+        # A fresh round is 50/50; winning its first point makes it 75/25.
+        # The second point either ends the match or returns to 50/50.
+        return 0.5
+    remaining = 2 * target - sum(scores) - 2
+    return comb(remaining, target - scores[0] - 1) / 2 ** remaining
+
+
 def database_stats(players, matches):
     """Point opportunity rates from completed logs; Elo from all completed results."""
     def counters():
@@ -86,6 +97,7 @@ def database_stats(players, matches):
 
     overall = counters()
     personal = {p['id']: counters() for p in players}
+    clutch = {p['id']: dict(residual=0.0, weight=0.0, matches=0) for p in players}
 
     def record(counter, won):
         counter['total'] += 1
@@ -95,10 +107,23 @@ def database_stats(players, matches):
         if match.get('status', 'completed') != 'completed' or not match.get('target_points'):
             continue
         sides = (match['player1'], match['player2'])
+        state = live_state(match)
+        complete_log = (state['winner'] is not None
+                        and (state['score1'], state['score2']) == (match['score1'], match['score2']))
+        if complete_log:
+            baseline = state['score1'] / len(state['history'])
+            for player in sides:
+                clutch[player]['matches'] += 1
         server = sides[0]
         scores, overtime, overtime_score = (0, 0), 0, (0, 0)
-        for point in live_state(match)['history']:
+        for point in state['history']:
             winner = point['player']
+            if complete_log:
+                weight = point_leverage(match['target_points'], scores, overtime)
+                residual = weight * (int(winner == sides[0]) - baseline)
+                for player, value in ((sides[0], residual), (sides[1], -residual)):
+                    clutch[player]['residual'] += value
+                    clutch[player]['weight'] += weight
             record(overall['server'], winner == server)
             record(personal[server]['server'], winner == server)
             for side, player in enumerate(sides):
@@ -123,6 +148,10 @@ def database_stats(players, matches):
     srs = simple_ratings(players, matches)
     ranks = {row['player']['id']: row['rank'] for row in standings(players, matches)}
     for player_id, row in summaries.items():
+        tracked = clutch[player_id]
+        personal[player_id].update(
+            clutch=100 * tracked['residual'] / tracked['weight'] if tracked['weight'] else None,
+            clutch_matches=tracked['matches'])
         personal[player_id].update(rank=ranks.get(player_id), srs=srs[player_id],
                                    pd=row['scored'] - row['conceded'],
                                    net_points=(row['scored'] - row['conceded']) / row['matches']
