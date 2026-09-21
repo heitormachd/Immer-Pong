@@ -57,12 +57,10 @@
 <label>Compare with<select name="opponent"><option value="">Choose an opponent (optional)</option>{% for p in players if p.id != player_id %}<option value="{{ p.id }}" {% if p.id == opponent_id %}selected{% endif %}>{{ p.name }}{{ ' (retired)' if not p.active else '' }}</option>{% endfor %}</select></label>
 </form>
 {% if opponent_id %}
-<h3>{{ names[player_id] }} vs {{ names[opponent_id] }}</h3>
 <dl class="stats-grid">
 {{ number('Matches played', duel_count) }}
-{{ number('Points for', duel[player_id].scored) }}
-{{ number('Points against', duel[player_id].conceded) }}
 {{ rate('Match winrate', dict(wins=duel[player_id].wins, total=duel[player_id].matches)) }}
+{{ rate('Points winrate', dict(wins=duel[player_id].scored, total=duel[player_id].scored + duel[player_id].conceded)) }}
 {{ rate('Points won on serve', duel[player_id].server) }}
 {{ rate('Match points converted (pro)', duel[player_id].match_point) }}
 {{ rate('Match points saved (against)', duel[player_id].against) }}

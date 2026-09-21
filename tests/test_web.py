@@ -66,8 +66,9 @@ class WebTests(unittest.TestCase):
         self.assertIn('<dt>Matches played</dt><dd><strong>2</strong>', page.text)
         self.assertIn('50.0%', page.text)
         self.assertIn('66.7%', page.text)
-        self.assertIn('Points for', page.text)
-        self.assertIn('Points against', page.text)
+        self.assertIn('Points winrate', page.text)
+        self.assertNotIn('Points for', page.text)
+        self.assertNotIn('Points against', page.text)
         self.assertIn('Performance expectation', page.text)
         self.assertIn('<dt>Clutch</dt>', page.text)
         self.assertIn('no complete point histories', page.text)
@@ -87,7 +88,8 @@ class WebTests(unittest.TestCase):
         self.store.create_live_match(a, b, 2)
         page = self.client.get('/stats', query_string=dict(section='player', player=a, opponent=b))
         self.assertEqual(page.status_code, 200)
-        duel = page.text.split('Alice vs Bob')[1]
+        self.assertNotIn('Alice vs Bob', page.text)
+        duel = page.text
         self.assertIn('<dt>Matches played</dt><dd><strong>1</strong>', duel)
         self.assertIn('33.3%', duel)  # Alice wins 1 of 3 serves against Bob.
         self.assertIn('0/2', duel)  # Alice converts neither match point.
