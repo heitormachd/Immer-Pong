@@ -113,7 +113,8 @@ class WebTests(unittest.TestCase):
         a, b, c = self.ids[:3]
         for opponent, sequence in ((b, (a, b, a, b, b, b)), (c, (a, a))):
             match = self.store.create_live_match(a, opponent, 2)[1][-1]
-            for revision, player in enumerate(sequence):
+            self.store.set_first_server(match['id'], a, 0)
+            for revision, player in enumerate(sequence, 1):
                 self.store.score_live_match(match['id'], player, revision)
         self.store.create_live_match(a, b, 2)
         page = self.client.get('/stats', query_string=dict(section='player', player=a, opponent=b))
@@ -128,7 +129,8 @@ class WebTests(unittest.TestCase):
     def test_player_clutch_displays_score(self):
         a, b = self.ids[:2]
         match = self.store.create_live_match(a, b, 3)[1][-1]
-        for revision, player in enumerate((b, a, a, a)):
+        self.store.set_first_server(match['id'], a, 0)
+        for revision, player in enumerate((b, a, a, a), 1):
             self.store.score_live_match(match['id'], player, revision)
         before = self.ledger()
         page = self.client.get('/stats', query_string=dict(section='player', player=a))
@@ -168,10 +170,38 @@ class WebTests(unittest.TestCase):
         self.post('/players', action='restore', player_id=eve)
         self.assertTrue(self.store.snapshot()[0][-1]['active'])
 
+    def test_first_server_selection_is_required_and_persists(self):
+        a, b = self.ids[:2]
+        for server, name in ((a, 'Alice'), (b, 'Bob')):
+            with self.subTest(server=name):
+                path = self.post('/', action='create_live', player1=a, player2=b, target=2).location
+                page = self.client.get(path).text
+                self.assertIn('Alice to serve', page)
+                self.assertIn('Bob to serve', page)
+                self.assertNotIn('+1 point', page)
+                self.assertNotIn('>ACE!</button>', page)
+                before = self.ledger()
+                for action, player in (('point', a), ('first_server', self.ids[2])):
+                    self.assertEqual(self.post(path, action=action, player_id=player, revision=0).status_code, 409)
+                    self.assertEqual(before, self.ledger())
+                self.assertEqual(self.post(path, action='first_server', player_id=server, revision=0).status_code, 303)
+                match = self.store.snapshot()[1][-1]
+                self.assertEqual((match['first_server'], match['point_log'], match['revision']), (server, [], 1))
+                page = self.client.get(path).text
+                self.assertIn('First server: ' + name, page)
+                self.assertEqual(page.count('>ACE!</button>'), 2)
+                self.assertNotIn('to serve</button>', page)
+                self.assertEqual(self.post(path, action='first_server', player_id=a, revision=0).status_code, 409)
+                self.assertEqual(self.post(path, action='point', player_id=server, revision=1).status_code, 303)
+                self.assertEqual(self.post(path, action='first_server', player_id=a, revision=2).status_code, 409)
+                self.assertEqual(self.post(path, action='undo', revision=2).status_code, 303)
+                self.assertEqual(self.store.snapshot()[1][-1]['first_server'], server)
+
     def test_live_elo_estimates_follow_current_ratings(self):
         a, b = self.ids[:2]
         response = self.post('/', action='create_live', player1=a, player2=b, target=2)
         path = response.location
+        self.assertEqual(self.post(path, action='first_server', player_id=a, revision=0).status_code, 303)
         before = self.ledger()
         page = self.client.get(path).text
         self.assertEqual(page.count('50.0%'), 2)
@@ -188,12 +218,12 @@ class WebTests(unittest.TestCase):
             self.assertIn(value, center_and_right)
         self.assertNotIn('-14.53', page)
         self.assertNotIn('-17.47', page)
-        self.post(path, action='point', player_id=a, revision=0)
-        self.assertIn('54.6%', self.client.get(path).text)
         self.post(path, action='point', player_id=a, revision=1)
+        self.assertIn('54.6%', self.client.get(path).text)
+        self.post(path, action='point', player_id=a, revision=2)
         self.assertNotIn('Win probability', self.client.get(path).text)
         self.assertIn('(+14.53)', self.client.get('/').text)
-        self.post(path, action='undo', revision=2)
+        self.post(path, action='undo', revision=3)
         self.assertIn('54.6%', self.client.get(path).text)
 
     def test_live_scoring_overtime_stale_submission_finish_and_undo(self):
@@ -201,14 +231,15 @@ class WebTests(unittest.TestCase):
         response = self.post('/', action='create_live', player1=a, player2=b, target=2)
         self.assertEqual(response.status_code, 303)
         path = response.location
+        self.assertEqual(self.post(path, action='first_server', player_id=a, revision=0).status_code, 303)
         self.assertEqual(self.client.get(path).status_code, 200)
         # 1–1 starts overtime, A/B resets it, B/B wins the second round.
-        for revision, player in enumerate((a, b, a, b, b, b)):
+        for revision, player in enumerate((a, b, a, b, b, b), 1):
             response = self.post(path, action='point', player_id=player, revision=revision)
             self.assertEqual(response.status_code, 303)
-            self.assertEqual(response.location, '/' if revision == 5 else path)
-            if revision == 0:
-                stale = self.post(path, action='point', player_id=b, revision=0)
+            self.assertEqual(response.location, '/' if revision == 6 else path)
+            if revision == 1:
+                stale = self.post(path, action='point', player_id=b, revision=1)
                 self.assertEqual(stale.status_code, 409)
                 self.assertIn('changed on another computer', stale.text)
         match = self.store.snapshot()[1][0]
@@ -217,7 +248,7 @@ class WebTests(unittest.TestCase):
         self.assertIn('Winner: Bob', page)
         self.assertIn('Split → reset', page)
         self.assertIn('Undo the winning point?', page)
-        self.assertEqual(self.post(path, action='undo', revision=6).status_code, 303)
+        self.assertEqual(self.post(path, action='undo', revision=7).status_code, 303)
         self.assertEqual(self.store.snapshot()[1][0]['status'], 'in_progress')
         self.assertIn('0 completed matches', self.client.get('/leaderboards').text)
         self.assertEqual(self.post(path, action='delete').status_code, 303)
@@ -226,19 +257,20 @@ class WebTests(unittest.TestCase):
     def test_ace_points_are_saved_displayed_and_undone(self):
         a, b = self.ids[:2]
         path = self.post('/', action='create_live', player1=a, player2=b, target=2).location
+        self.assertEqual(self.post(path, action='first_server', player_id=b, revision=0).status_code, 303)
         page = self.client.get(path).text
         self.assertEqual(page.count('>ACE!</button>'), 2)
-        for revision, player in enumerate((b, a, a, a)):
+        for revision, player in enumerate((b, a, a, a), 1):
             response = self.post(path, action='point', player_id=player, revision=revision, ace='1')
             self.assertEqual(response.status_code, 303)
         match = self.store.snapshot()[1][0]
         self.assertEqual((match['score1'], match['score2'], match['status']), (3, 1, 'completed'))
         self.assertTrue(all(point['ace'] for point in match['point_log']))
         self.assertEqual(self.client.get(path).text.count('<td>ACE!</td>'), 4)
-        self.assertEqual(self.post(path, action='point', player_id=b, revision=4, ace='1').status_code, 409)
-        self.assertEqual(self.post(path, action='undo', revision=4).status_code, 303)
+        self.assertEqual(self.post(path, action='point', player_id=b, revision=5, ace='1').status_code, 409)
+        self.assertEqual(self.post(path, action='undo', revision=5).status_code, 303)
         self.assertEqual(self.client.get(path).text.count('<td>ACE!</td>'), 3)
-        self.assertEqual(self.post(path, action='point', player_id=a, revision=5).status_code, 303)
+        self.assertEqual(self.post(path, action='point', player_id=a, revision=6).status_code, 303)
         match = self.store.snapshot()[1][0]
         self.assertNotIn('ace', match['point_log'][-1])
         self.assertEqual(self.client.get(path).text.count('<td>ACE!</td>'), 3)
@@ -272,10 +304,11 @@ class WebTests(unittest.TestCase):
                              player1=fixture['player1'], player2=fixture['player2'])
         self.assertEqual(response.status_code, 303)
         live_path = response.location
+        self.assertEqual(self.post(live_path, action='first_server', player_id=a, revision=0).status_code, 303)
         self.assertIn('Open live score', self.client.get(tournament_path).text)
 
-        self.assertEqual(self.post(live_path, action='point', player_id=a, revision=0).status_code, 303)
-        response = self.post(live_path, action='point', player_id=a, revision=1)
+        self.assertEqual(self.post(live_path, action='point', player_id=a, revision=1).status_code, 303)
+        response = self.post(live_path, action='point', player_id=a, revision=2)
         self.assertEqual(response.status_code, 303)
         self.assertEqual(response.location, tournament_path)
         self.assertTrue(tournament_state(tournament, self.store.snapshot()[1])['complete'])

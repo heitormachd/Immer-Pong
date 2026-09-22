@@ -276,12 +276,16 @@ adds them at the end of global history, so Elo is recalculated in that new order
 
 `data/players.csv`, `data/matches.csv`, and `data/tournaments.csv` are UTF-8 tables created as needed. Players have stable IDs, names, and `active` (1/0). Matches
 have IDs, UTC timestamps, player IDs, integer scores, and optional tournament and
-fixture IDs. Live matches use four additional columns in the same match table:
+fixture IDs. The `first_server` column stores the starting server’s player ID;
+existing matches default to Player 1. New live matches show a “{player name} to serve”
+button for each player at 0–0. Choose one to enable point and ACE buttons.
+The winner of each point serves next, and serve statistics use the saved first server.
+Live matches also use these columns in the same match table:
 `target_points`, `point_log`, `status`, and `revision`. `point_log` is an ordered
 JSON list of objects containing the scoring player's stable ID (`player`) and UTC
 `timestamp`. List position is the point order; overtime and cumulative totals can
 be reconstructed from the target and sequence. Undo removes the mistaken last
-event, and `revision` increases on every point/undo to reject stale submissions.
+event, and `revision` increases on every server selection, point, or undo to reject stale submissions.
 `status` is `in_progress` or `completed`. The match `timestamp` records creation
 until the first finish, then its most recent completion. Existing final-result
 matches have no target, an empty point log, status `completed`, and revision 0.

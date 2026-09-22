@@ -21,6 +21,19 @@ class StatsTests(unittest.TestCase):
         self.assertNotIn('average_elo', result)
         self.assertIsNone(result['median_elo'])
 
+    def test_player_two_first_server_changes_only_first_point_opportunity(self):
+        # A completed B sweep: first service and subsequent services all belong to B.
+        match = self.match('bbb', target=3)
+        match['first_server'] = 'b'
+        result = database_stats(self.players, [match])
+        self.assertEqual(result['overall']['server'], dict(wins=3, total=3))
+        self.assertEqual(result['personal']['b']['server'], dict(wins=3, total=3))
+        self.assertEqual(result['personal']['a']['server'], dict(wins=0, total=0))
+        match['first_server'] = 'a'
+        result = database_stats(self.players, [match])
+        self.assertEqual(result['overall']['server'], dict(wins=2, total=3))
+        self.assertEqual(result['personal']['a']['server'], dict(wins=0, total=1))
+
     def test_regular_match_and_excluded_results(self):
         result = database_stats(self.players, [self.match('aaa', target=3)])
         self.assertEqual(result['overall']['server'], dict(wins=3, total=3))

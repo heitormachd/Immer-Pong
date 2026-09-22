@@ -21,7 +21,7 @@ def raw_match(sequence, target=7):
 def concurrent_point(directory, match_id, player, queue):
     for _ in range(100):
         try:
-            Store(directory).score_live_match(match_id, player, 0)
+            Store(directory).score_live_match(match_id, player, 1)
             queue.put('saved')
             return
         except StoreError as exc:
@@ -97,7 +97,8 @@ class LiveStorageTests(unittest.TestCase):
         self.a, self.b = [p['id'] for p in players]
 
     def create(self, target=7):
-        return self.store.create_live_match(self.a, self.b, target)[1][-1]
+        match = self.store.create_live_match(self.a, self.b, target)[1][-1]
+        return self.store.set_first_server(match['id'], self.a, 0)[1][-1]
 
     def point(self, match, player):
         snapshot = self.store.score_live_match(match['id'], player, match['revision'])
@@ -145,7 +146,7 @@ class LiveStorageTests(unittest.TestCase):
         match = self.point(match, self.a)
         match = self.point(match, None)
         self.assertEqual(match['point_log'], [])
-        self.assertEqual(match['revision'], 2)
+        self.assertEqual(match['revision'], 3)
         with self.assertRaisesRegex(StoreError, 'another computer'):
             self.store.score_live_match(match['id'], self.b, 0)
 

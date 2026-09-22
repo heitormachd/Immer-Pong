@@ -30,7 +30,8 @@ class EloStorageTests(unittest.TestCase):
         return rows
 
     def test_all_legacy_schemas_backfill_preserve_and_do_not_repeat(self):
-        for fields in (Store.LEGACY_MATCH_FIELDS, Store.TOURNAMENT_MATCH_FIELDS, Store.LIVE_MATCH_FIELDS):
+        for fields in (Store.LEGACY_MATCH_FIELDS, Store.TOURNAMENT_MATCH_FIELDS, Store.LIVE_MATCH_FIELDS,
+                       Store.PREVIOUS_MATCH_FIELDS, Store.BEST_OF_MATCH_FIELDS):
             with self.subTest(fields=fields):
                 self.path.unlink(missing_ok=True)
                 rows = self.legacy(fields)
@@ -38,6 +39,7 @@ class EloStorageTests(unittest.TestCase):
                 backup = self.store.migrate_elo()
                 self.assertEqual(backup.read_bytes(), before)
                 players, matches, _ = self.store.snapshot()
+                self.assertTrue(all(m['first_server'] == m['player1'] for m in matches))
                 self.assertEqual((matches[0]['elo1_before'], matches[0]['elo2_before']), (1000, 1000))
                 self.assertEqual((matches[1]['elo1_before'], matches[1]['elo2_before']), (984, 1016))
                 with self.path.open(newline='') as handle:
@@ -61,16 +63,17 @@ class EloStorageTests(unittest.TestCase):
 
     def test_undo_and_recompletion_refresh_later_ratings(self):
         match = self.store.create_live_match(self.a, self.b, 2)[1][-1]
+        self.store.set_first_server(match['id'], self.a, 0)
         self.assertIsNone(match['elo1_before'])
-        self.store.score_live_match(match['id'], self.a, 0)
         self.store.score_live_match(match['id'], self.a, 1)
+        self.store.score_live_match(match['id'], self.a, 2)
         self.store.register(self.b, self.a, 7, 0)
         self.assertEqual(self.store.snapshot()[1][-1]['elo1_before'], 984)
-        self.store.score_live_match(match['id'], None, 2)
+        self.store.score_live_match(match['id'], None, 3)
         matches = self.store.snapshot()[1]
         self.assertIsNone(matches[0]['elo1_before'])
         self.assertEqual(matches[1]['elo1_before'], 1000)
-        self.store.score_live_match(match['id'], self.a, 3)
+        self.store.score_live_match(match['id'], self.a, 4)
         matches = self.store.snapshot()[1]
         self.assertEqual(matches[-1]['id'], match['id'])
         self.assertEqual((matches[-1]['elo1_before'], matches[-1]['elo2_before']), (984, 1016))

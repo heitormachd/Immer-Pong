@@ -215,12 +215,13 @@ class TournamentStorageTests(unittest.TestCase):
         match = self.store.create_live_tournament_match(
             tournament['id'], fixture['id'], None,
             (fixture['player1'], fixture['player2']))[1][-1]
-        for revision in range(4):
+        self.store.set_first_server(match['id'], match['player1'], 0)
+        for revision in range(1, 5):
             self.store.score_live_match(match['id'], match['player1'], revision)
         players, matches, tournaments = self.store.snapshot()
         self.assertTrue(tournament_state(tournaments[-1], matches)['complete'])
         self.assertEqual((matches[-1]['score1'], matches[-1]['score2']), (2, 0))
-        self.store.score_live_match(match['id'], None, 4)
+        self.store.score_live_match(match['id'], None, 5)
         self.assertFalse(tournament_state(tournament, self.store.snapshot()[1])['complete'])
 
     def test_invalid_scoring_settings_rejected(self):

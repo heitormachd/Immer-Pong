@@ -134,14 +134,14 @@ class Store:
                 if match['player1'] not in ids or match['player2'] not in ids:
                     raise ValueError('Match references a missing player')
                 match.setdefault('first_server', match['player1'])
-                if (match['first_server'] not in (match['player1'], match['player2'], '')
-                        or not match['first_server'] and (match['point_log'] != '[]' or match['status'] == 'completed')):
-                    raise ValueError('Invalid first server')
                 match['best_of'] = int(match.get('best_of') or 1)
                 match['score1'] = int(match['score1'])
                 match['score2'] = int(match['score2'])
                 match['target_points'] = int(match['target_points']) if match['target_points'] else None
                 match['point_log'] = json.loads(match['point_log'])
+                if (match['first_server'] not in (match['player1'], match['player2'], '')
+                        or not match['first_server'] and (match['point_log'] or match['status'] == 'completed')):
+                    raise ValueError('Invalid first server')
                 match['revision'] = int(match['revision'])
                 for field in ('elo1_before', 'elo2_before'):
                     if field in match:
