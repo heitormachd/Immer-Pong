@@ -47,6 +47,10 @@ fieldset { border: 1px solid #666666; padding: 14px; }
 .scoreboard span { color: #aaaaaa; }
 .scoring { justify-content: center; }
 .scoring button { padding: 14px 22px; font-size: 16px; }
+.scoring-player { display: flex; align-items: stretch; gap: 6px; max-width: 100%; }
+.scoring-player:first-child { flex-direction: row-reverse; }
+.scoring-player form { display: flex; }
+.scoring .ace-button { width: 48px; flex-shrink: 0; padding: 0; font-size: 13px; font-weight: bold; }
 .winner { font-weight: bold; color: #7bd88a; }
 .match-list { padding-left: 20px; line-height: 2; }
 .next-match { border: 1px solid #888888; padding: 12px; margin: 18px 0 24px; background: #383838; }

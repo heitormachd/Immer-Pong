@@ -114,7 +114,7 @@ def database_stats(players, matches):
             baseline = state['score1'] / len(state['history'])
             for player in sides:
                 clutch[player]['matches'] += 1
-        server = sides[0]
+        server = match.get('first_server', sides[0])
         scores, overtime, overtime_score = (0, 0), 0, (0, 0)
         for point in state['history']:
             winner = point['player']

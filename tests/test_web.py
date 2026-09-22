@@ -223,6 +223,26 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.post(path, action='delete').status_code, 303)
         self.assertEqual(self.client.get(path).status_code, 404)
 
+    def test_ace_points_are_saved_displayed_and_undone(self):
+        a, b = self.ids[:2]
+        path = self.post('/', action='create_live', player1=a, player2=b, target=2).location
+        page = self.client.get(path).text
+        self.assertEqual(page.count('>ACE!</button>'), 2)
+        for revision, player in enumerate((b, a, a, a)):
+            response = self.post(path, action='point', player_id=player, revision=revision, ace='1')
+            self.assertEqual(response.status_code, 303)
+        match = self.store.snapshot()[1][0]
+        self.assertEqual((match['score1'], match['score2'], match['status']), (3, 1, 'completed'))
+        self.assertTrue(all(point['ace'] for point in match['point_log']))
+        self.assertEqual(self.client.get(path).text.count('<td>ACE!</td>'), 4)
+        self.assertEqual(self.post(path, action='point', player_id=b, revision=4, ace='1').status_code, 409)
+        self.assertEqual(self.post(path, action='undo', revision=4).status_code, 303)
+        self.assertEqual(self.client.get(path).text.count('<td>ACE!</td>'), 3)
+        self.assertEqual(self.post(path, action='point', player_id=a, revision=5).status_code, 303)
+        match = self.store.snapshot()[1][0]
+        self.assertNotIn('ace', match['point_log'][-1])
+        self.assertEqual(self.client.get(path).text.count('<td>ACE!</td>'), 3)
+
     def test_round_robin_ignores_finals_scoring_options(self):
         response = self.post('/tournaments', name='League', system='round_robin',
                              participants=self.ids, target_stage='final',

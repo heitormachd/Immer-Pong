@@ -17,7 +17,8 @@ def live_state(match):
     total, overtime_score = [0, 0], [0, 0]
     overtime_round, winner, history = 0, None, []
     for number, event in enumerate(match['point_log'], 1):
-        if (not isinstance(event, dict) or set(event) != {'player', 'timestamp'}
+        if (not isinstance(event, dict) or set(event) not in ({'player', 'timestamp'}, {'player', 'timestamp', 'ace'})
+                or type(event.get('ace', False)) is not bool
                 or event['player'] not in players or not isinstance(event['timestamp'], str)):
             raise ValueError('Invalid point event')
         if winner is not None:
@@ -45,7 +46,7 @@ def live_state(match):
             if games[players.index(game_winner)] < best_of // 2 + 1:
                 winner = None
         history.append(dict(game=game_number, number=number, player=event['player'], timestamp=event['timestamp'],
-                            score1=total[0], score2=total[1], overtime_round=played_round,
+                            ace=event.get('ace', False), score1=total[0], score2=total[1], overtime_round=played_round,
                             overtime_score=tuple(overtime_score), reset=reset))
         if game_winner is not None and winner is None:
             total, overtime_score = [0, 0], [0, 0]

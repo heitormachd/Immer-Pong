@@ -188,12 +188,15 @@ def create_app(data_directory=None, url_prefix=""):
             action = request.form.get('action')
             if action in ('point', 'undo'):
                 player = request.form.get('player_id', '') if action == 'point' else None
-                _, rows, _ = store.score_live_match(match_id, player, integer('revision'))
+                _, rows, _ = store.score_live_match(match_id, player, integer('revision'),
+                                                   ace=request.form.get('ace') == '1')
                 finished = next((m for m in rows if m['id'] == match_id), None)
                 if action == 'point' and finished and finished['status'] == 'completed':
                     if finished['tournament_id']:
                         return redirect(url_for('tournament', tournament_id=finished['tournament_id']), 303)
                     return redirect(url_for('matches'), 303)
+            elif action == 'first_server':
+                store.set_first_server(match_id, request.form.get('player_id', ''), integer('revision'))
             elif action == 'delete':
                 store.delete_match(match_id)
                 return redirect(url_for('matches'), 303)

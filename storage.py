@@ -28,7 +28,8 @@ class Store:
     TOURNAMENT_MATCH_FIELDS = (*LEGACY_MATCH_FIELDS, 'tournament_id', 'fixture_id')
     LIVE_MATCH_FIELDS = (*TOURNAMENT_MATCH_FIELDS, 'target_points', 'point_log', 'status', 'revision')
     PREVIOUS_MATCH_FIELDS = (*LIVE_MATCH_FIELDS, 'elo1_before', 'elo2_before')
-    MATCH_FIELDS = (*PREVIOUS_MATCH_FIELDS, 'best_of')
+    BEST_OF_MATCH_FIELDS = (*PREVIOUS_MATCH_FIELDS, 'best_of')
+    MATCH_FIELDS = (*BEST_OF_MATCH_FIELDS, 'first_server')
     LEGACY_TOURNAMENT_FIELDS = ('id', 'name', 'system', 'created_at', 'players', 'groups', 'classification', 'badge')
     PREVIOUS_TOURNAMENT_FIELDS = (*LEGACY_TOURNAMENT_FIELDS, 'format_version')
     TOURNAMENT_FIELDS = (*PREVIOUS_TOURNAMENT_FIELDS, 'target_points', 'target_stage', 'alternate_target', 'bo3_stage')
@@ -56,7 +57,8 @@ class Store:
                 reader = csv.DictReader(handle, strict=True)
                 legacy = name == 'matches.csv' and reader.fieldnames in (
                     list(self.LEGACY_MATCH_FIELDS), list(self.TOURNAMENT_MATCH_FIELDS),
-                    list(self.LIVE_MATCH_FIELDS), list(self.PREVIOUS_MATCH_FIELDS))
+                    list(self.LIVE_MATCH_FIELDS), list(self.PREVIOUS_MATCH_FIELDS),
+                    list(self.BEST_OF_MATCH_FIELDS))
                 legacy_tournaments = (name == 'tournaments.csv'
                                       and reader.fieldnames in (list(self.LEGACY_TOURNAMENT_FIELDS),
                                                                 list(self.PREVIOUS_TOURNAMENT_FIELDS)))
@@ -131,6 +133,10 @@ class Store:
                     raise ValueError('Match timestamps must be UTC')
                 if match['player1'] not in ids or match['player2'] not in ids:
                     raise ValueError('Match references a missing player')
+                match.setdefault('first_server', match['player1'])
+                if (match['first_server'] not in (match['player1'], match['player2'], '')
+                        or not match['first_server'] and (match['point_log'] != '[]' or match['status'] == 'completed')):
+                    raise ValueError('Invalid first server')
                 match['best_of'] = int(match.get('best_of') or 1)
                 match['score1'] = int(match['score1'])
                 match['score2'] = int(match['score2'])
@@ -182,6 +188,7 @@ class Store:
         if name == 'matches.csv':
             for row in rows:
                 row.setdefault('best_of', 1)
+                row.setdefault('first_server', row['player1'])
             rebuild_match_elos(rows)
         temporary = None
         try:
@@ -393,7 +400,7 @@ class Store:
                                 player1=fixture['player1'], player2=fixture['player2'], score1=0, score2=0,
                                 tournament_id=tournament_id, fixture_id=fixture_id,
                                 target_points=fixture['target_points'], best_of=fixture['best_of'],
-                                point_log=[], status='in_progress', revision=0))
+                                point_log=[], status='in_progress', revision=0, first_server=''))
             self._write('matches.csv', self.MATCH_FIELDS, matches)
             return players, matches, tournaments
 
@@ -409,11 +416,28 @@ class Store:
             matches.append(dict(id=uuid.uuid4().hex, timestamp=datetime.now(timezone.utc).isoformat(),
                                 player1=player1, player2=player2, score1=0, score2=0,
                                 tournament_id='', fixture_id='', target_points=target_points,
-                                point_log=[], status='in_progress', revision=0))
+                                point_log=[], status='in_progress', revision=0, first_server=''))
             self._write('matches.csv', self.MATCH_FIELDS, matches)
             return players, matches, tournaments
 
-    def score_live_match(self, match_id, player_id, expected_revision):
+    def set_first_server(self, match_id, player_id, expected_revision):
+        with self._locked():
+            players, matches, tournaments = self._load()
+            match = next((m for m in matches if m['id'] == match_id), None)
+            if match is None or match['target_points'] is None:
+                raise StoreError('Live match not found. Refresh and try again.')
+            if match['revision'] != expected_revision:
+                raise StoreError('This match changed on another computer. Refresh before selecting the server.')
+            if match['point_log'] or match['status'] != 'in_progress':
+                raise StoreError('Choose the first server before scoring any points.')
+            if player_id not in (match['player1'], match['player2']):
+                raise StoreError('The server is not playing in this match.')
+            match['first_server'] = player_id
+            match['revision'] += 1
+            self._write('matches.csv', self.MATCH_FIELDS, matches)
+            return players, matches, tournaments
+
+    def score_live_match(self, match_id, player_id, expected_revision, ace=False):
         """Add a point, or undo the last point when player_id is None."""
         with self._locked():
             players, matches, tournaments = self._load()
@@ -431,7 +455,12 @@ class Store:
                     raise StoreError('This match already has a winner.')
                 if player_id not in (match['player1'], match['player2']):
                     raise StoreError('The scorer is not playing in this match.')
-                match['point_log'].append(dict(player=player_id, timestamp=datetime.now(timezone.utc).isoformat()))
+                if not match['first_server']:
+                    raise StoreError('Choose the first server before scoring any points.')
+                event = dict(player=player_id, timestamp=datetime.now(timezone.utc).isoformat())
+                if ace:
+                    event['ace'] = True
+                match['point_log'].append(event)
             state = live_state(match)
             match['score1'], match['score2'] = state['score1'], state['score2']
             match['revision'] += 1
