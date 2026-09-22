@@ -300,20 +300,46 @@ leave upgraded tables unchanged. Stop older app instances before upgrading; thei
 CSV reader does not understand the new columns.
 
 Stats shows median Elo for players with at least two completed matches (including
-retired players). Player performance expectation is
-`100 × average(actual result − pre-match Elo win probability)`, in percentage
-points; positive means more wins than predicted. Match totals and points include
-all completed results, while serving and clutch rates require point histories.
+retired players). Match totals and points include all completed results, while
+serving and clutch rates require point histories.
 Duel comparisons use only the selected pair's completed matches.
 
-Player Clutch is `100 × sum(L × (point won − match point win rate)) / sum(L)`,
-in percentage points. `L` is the difference in match win probability between
-winning and losing the next point, assuming future points are 50/50 and using
-the resetting overtime rules. Each match supplies its own baseline; aggregating
-points weights match scores by their total importance. Positive scores indicate
-better performance on important points relative to the player's overall play
-in those matches. Only completed logs that reproduce the final score count;
-small samples are provisional.
+Player advanced stats are calculated as follows:
+
+- **Net Points:** `(total points scored − total points conceded) / completed matches`.
+  This is the average scoring margin per match, including all overtime points.
+  For example, wins of 7–4 and 7–5 plus a 3–7 loss give `(3 + 2 − 4) / 3 = +0.33`
+  points per match.
+- **SRS (Simple Rating System):** `SRS = Net Points + average opponent SRS`.
+  The equations are solved together for all players, counting each opponent once
+  per completed match against them. Each connected group of opponents is centered
+  so its player ratings sum to zero. Positive ratings indicate above-average
+  performance within that group, in points per match, adjusted for opponent
+  strength. Separate groups have independent baselines and are not directly
+  comparable.
+- **Performance expectation:** `100 × average(actual result − expected win probability)`.
+  The actual result is 1 for a win and 0 for a loss. For each completed match,
+  `expected win probability = 1 / (1 + 10^((opponent Elo − player Elo) / 400))`,
+  using both players' pre-match ratings. The result is in percentage points (pp):
+  winning 60% of matches with an average expected win probability of 50% gives
+  `+10 pp`. Positive values mean more wins than Elo predicted.
+- **Clutch:** `100 × sum(L × (point won − match point win rate)) / sum(L)`.
+  Here, `point won` is 1 or 0, and the baseline is the player's points scored
+  divided by all points played in that match. `L` measures the difference in
+  match win probability between winning and losing the next point, assuming
+  future points are 50/50 and using the resetting overtime rules. Before overtime,
+  with target `T` and pre-point scores `a` and `b`,
+  `L = C(2T − a − b − 2, T − a − 1) / 2^(2T − a − b − 2)`, where `C(n, k)` is
+  the binomial coefficient; in overtime, `L = 0.5`. Sums run over points across
+  eligible matches, each with its own baseline, so matches are weighted by their
+  total point importance. Positive scores mean better performance on important
+  points relative to the player's overall play in those matches, in percentage
+  points. Only complete point histories that reproduce the final score count;
+  small samples are provisional.
+
+Net Points, SRS, and Performance expectation use all completed results, including
+final-result-only matches. They show `—` without completed matches; Clutch shows
+`—` without an eligible complete point history.
 
 All reads and writes acquire `.write-lock` in the selected data directory using
 exclusive directory creation.
