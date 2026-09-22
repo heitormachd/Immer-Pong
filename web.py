@@ -258,6 +258,8 @@ def create_app(data_directory=None, url_prefix=""):
                     tournament_id, request.form.get('fixture_id'), None,
                     (request.form.get('player1'), request.form.get('player2')))
                 return redirect(url_for('live', match_id=rows[-1]['id']), 303)
+            elif action == 'skip':
+                store.skip_tournament_match(tournament_id, request.form.get('fixture_id'))
             elif action == 'result':
                 store.register_tournament_match(tournament_id, request.form.get('fixture_id'),
                                                 integer('score1'), integer('score2'),
@@ -280,14 +282,25 @@ def create_app(data_directory=None, url_prefix=""):
             abort(404, 'Tournament not found.')
         state = tournament_state(event, data['matches'])
         live_fixture = next((f for f in state['fixtures'] if f['live_match'] is not None), None)
+        pending_fixtures = [f for f in state['fixtures']
+                            if not f['bye'] and f['result'] is None and f['live_match'] is None]
+        skipped_ids = set(event.get('skipped_fixtures', []))
+        skipped_fixtures = [f for f in pending_fixtures if f['id'] in skipped_ids]
         next_fixture = None if live_fixture else next(
-            (f for f in state['fixtures']
-             if not f['bye'] and f['result'] is None and f['live_match'] is None), None)
+            (f for f in pending_fixtures if f['id'] not in skipped_ids), None)
+        next_is_skipped = False
+        if next_fixture is None and skipped_fixtures and not live_fixture:
+            next_fixture = skipped_fixtures[0]
+            next_is_skipped = True
+        can_skip = bool(next_fixture and not next_is_skipped
+                        and any(f['id'] != next_fixture['id'] for f in pending_fixtures))
         latest = None if live_fixture else next(
             (m for m in reversed(data['matches'])
              if m['tournament_id'] == tournament_id and m['status'] == 'completed'), None)
         return render('tournament.html', 'tournaments', **data, event=event, latest=latest,
-                      state=state, next_fixture=next_fixture, live_fixture=live_fixture)
+                      state=state, next_fixture=next_fixture, live_fixture=live_fixture,
+                      next_is_skipped=next_is_skipped, can_skip=can_skip,
+                      skipped_fixtures=skipped_fixtures, skipped_ids=skipped_ids)
 
     if prefix:
         app.wsgi_app = DispatcherMiddleware(NotFound(), {prefix: app.wsgi_app})

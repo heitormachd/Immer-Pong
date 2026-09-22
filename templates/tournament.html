@@ -6,7 +6,7 @@
 <p>{{ event.classification|title }} · {{ systems[event.system] }} · {{ event.players|length }} players · {{ state.phase }}{% if state.champion %} · <b>Winner: {{ names[state.champion] }}</b>{% endif %}</p>
 {% if live_fixture or next_fixture %}
 <section class="next-match" id="next-match">
-<div class="next-match-label">{{ 'Current match' if live_fixture else 'Next match' }}</div>
+<div class="next-match-label">{{ 'Current match' if live_fixture else ('Deferred match' if next_is_skipped else 'Next match') }}</div>
 {% if live_fixture %}
 <h3>{{ names[live_fixture.player1] }} <span>vs</span> {{ names[live_fixture.player2] }}</h3>
 <p>{{ live_fixture.stage }} · Round {{ live_fixture.round }}</p>
@@ -14,8 +14,17 @@
 {% elif next_fixture %}
 <h3>{{ names[next_fixture.player1] }} <span>vs</span> {{ names[next_fixture.player2] }}</h3>
 <p>{{ next_fixture.stage }} · Round {{ next_fixture.round }}</p>
-<form method="post" class="row">{{ csrf() }}{{ hidden('action', 'start_live') }}{{ hidden('fixture_id', next_fixture.id) }}{{ hidden('player1', next_fixture.player1) }}{{ hidden('player2', next_fixture.player2) }}<span>Target {{ next_fixture.target_points }} · {{ "Best of 3" if next_fixture.best_of == 3 else "Single game" }}</span><button>Start live match</button></form>
+<form method="post" class="row">{{ csrf() }}{{ hidden('action', 'start_live') }}{{ hidden('fixture_id', next_fixture.id) }}{{ hidden('player1', next_fixture.player1) }}{{ hidden('player2', next_fixture.player2) }}<span>Target {{ next_fixture.target_points }} · {{ "Best of 3" if next_fixture.best_of == 3 else "Single game" }}</span><button>{{ 'Play now' if next_is_skipped else 'Start live match' }}</button></form>
+{% if can_skip %}<form method="post" class="row">{{ csrf() }}{{ hidden('action', 'skip') }}{{ hidden('fixture_id', next_fixture.id) }}<button>Skip for now</button><span>Play another available match first.</span></form>{% endif %}
 {% endif %}
+</section>
+{% endif %}
+{% if skipped_fixtures and not live_fixture %}
+<section class="next-match skipped-matches">
+<div class="next-match-label">Skipped for now</div>
+{% for f in skipped_fixtures if not next_is_skipped or f.id != next_fixture.id %}
+<form method="post" class="row">{{ csrf() }}{{ hidden('action', 'start_live') }}{{ hidden('fixture_id', f.id) }}{{ hidden('player1', f.player1) }}{{ hidden('player2', f.player2) }}<span>{{ names[f.player1] }} <span>vs</span> {{ names[f.player2] }} · {{ f.stage }} · Round {{ f.round }}</span><button>Play now</button></form>
+{% endfor %}
 </section>
 {% endif %}
 <h3>Bracket</h3>
@@ -32,8 +41,9 @@
 <div class="bracket-round-title">Round {{ round_group.grouper }}</div>
 {% for f in round_group.list %}
 {% set ready = not f.bye and not f.result and not f.live_match %}
-<article class="bracket-match{% if ready %} is-ready{% endif %}{% if f.live_match %} is-live{% endif %}{% if f.result %} is-complete{% endif %}">
-<div class="bracket-match-meta">Match {{ loop.index }}<span>{% if f.bye %}Bye{% elif f.live_match %}Live{% elif ready %}Ready{% endif %}</span></div>
+{% set skipped = f.id in skipped_ids %}
+<article class="bracket-match{% if ready %} is-ready{% endif %}{% if skipped %} is-skipped{% endif %}{% if f.live_match %} is-live{% endif %}{% if f.result %} is-complete{% endif %}">
+<div class="bracket-match-meta">Match {{ loop.index }}<span>{% if f.bye %}Bye{% elif f.live_match %}Live{% elif skipped %}Skipped{% elif ready %}Ready{% endif %}</span></div>
 <div class="bracket-player{% if f.winner == f.player1 %} is-winner{% endif %}"><span>{{ names.get(f.player1, 'Bye') }}</span><span class="bracket-score">{% if f.live_match %}{{ f.live_match.score1 }}{% elif f.result %}{{ f.result.score1 }}{% endif %}</span></div>
 <div class="bracket-player{% if f.winner == f.player2 %} is-winner{% endif %}"><span>{{ names.get(f.player2, 'Bye') }}</span><span class="bracket-score">{% if f.live_match %}{{ f.live_match.score2 }}{% elif f.result %}{{ f.result.score2 }}{% endif %}</span></div>
 {% if f.live_match %}<div class="bracket-status"><a href="{{ url_for('live', match_id=f.live_match.id) }}">Open live score</a></div>{% endif %}

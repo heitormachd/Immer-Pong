@@ -32,7 +32,9 @@ class Store:
     MATCH_FIELDS = (*BEST_OF_MATCH_FIELDS, 'first_server')
     LEGACY_TOURNAMENT_FIELDS = ('id', 'name', 'system', 'created_at', 'players', 'groups', 'classification', 'badge')
     PREVIOUS_TOURNAMENT_FIELDS = (*LEGACY_TOURNAMENT_FIELDS, 'format_version')
-    TOURNAMENT_FIELDS = (*PREVIOUS_TOURNAMENT_FIELDS, 'target_points', 'target_stage', 'alternate_target', 'bo3_stage')
+    SCORING_TOURNAMENT_FIELDS = (*PREVIOUS_TOURNAMENT_FIELDS, 'target_points', 'target_stage',
+                                 'alternate_target', 'bo3_stage')
+    TOURNAMENT_FIELDS = (*SCORING_TOURNAMENT_FIELDS, 'skipped_fixtures')
 
     def __init__(self, directory):
         self.directory = Path(directory)
@@ -61,7 +63,8 @@ class Store:
                     list(self.BEST_OF_MATCH_FIELDS))
                 legacy_tournaments = (name == 'tournaments.csv'
                                       and reader.fieldnames in (list(self.LEGACY_TOURNAMENT_FIELDS),
-                                                                list(self.PREVIOUS_TOURNAMENT_FIELDS)))
+                                                                list(self.PREVIOUS_TOURNAMENT_FIELDS),
+                                                                list(self.SCORING_TOURNAMENT_FIELDS)))
                 if reader.fieldnames != list(fields) and not legacy and not legacy_tournaments:
                     raise ValueError(f'Unexpected columns in {name}')
                 rows = list(reader)
@@ -77,8 +80,12 @@ class Store:
                             row.setdefault(key, value)
                 if legacy_tournaments:
                     for row in rows:
-                        row.setdefault('format_version', '1')
-                        row.update(target_points='7', target_stage='all', alternate_target='11', bo3_stage='none')
+                        if reader.fieldnames in (list(self.LEGACY_TOURNAMENT_FIELDS),
+                                                 list(self.PREVIOUS_TOURNAMENT_FIELDS)):
+                            row.setdefault('format_version', '1')
+                            row.update(target_points='7', target_stage='all', alternate_target='11',
+                                       bo3_stage='none')
+                        row.setdefault('skipped_fixtures', '[]')
                 return rows
         except FileNotFoundError:
             return []
@@ -102,6 +109,12 @@ class Store:
             for tournament in tournaments:
                 tournament['players'] = json.loads(tournament['players'])
                 tournament['groups'] = int(tournament['groups'])
+                tournament['skipped_fixtures'] = json.loads(tournament['skipped_fixtures'])
+                if (not isinstance(tournament['skipped_fixtures'], list)
+                        or any(not isinstance(fixture_id, str)
+                               for fixture_id in tournament['skipped_fixtures'])
+                        or len(set(tournament['skipped_fixtures'])) != len(tournament['skipped_fixtures'])):
+                    raise ValueError('Invalid skipped tournament fixtures')
                 for field in ('target_points', 'alternate_target'):
                     tournament[field] = int(tournament[field])
                 self._validate_scoring(tournament['target_points'], tournament['target_stage'],
@@ -206,6 +219,9 @@ class Store:
                         serialized['active'] = int(serialized['active'])
                     if 'players' in serialized:
                         serialized['players'] = json.dumps(serialized['players'])
+                    if 'skipped_fixtures' in fields:
+                        serialized['skipped_fixtures'] = json.dumps(
+                            serialized.get('skipped_fixtures', []))
                     if 'point_log' in serialized:
                         serialized['point_log'] = json.dumps(serialized['point_log'])
                     writer.writerow(serialized)
@@ -350,7 +366,33 @@ class Store:
                                     created_at=datetime.now(timezone.utc).isoformat(),
                                     players=seeds, groups=groups, classification=classification, badge=badge,
                                     format_version=2, target_points=target_points, target_stage=target_stage,
-                                    alternate_target=alternate_target, bo3_stage=bo3_stage))
+                                    alternate_target=alternate_target, bo3_stage=bo3_stage,
+                                    skipped_fixtures=[]))
+            self._write('tournaments.csv', self.TOURNAMENT_FIELDS, tournaments)
+            return players, matches, tournaments
+
+    def skip_tournament_match(self, tournament_id, fixture_id):
+        with self._locked():
+            players, matches, tournaments = self._load()
+            tournament = next((t for t in tournaments if t['id'] == tournament_id), None)
+            if tournament is None:
+                raise StoreError('Tournament not found. Refresh and try again.')
+            if any(m.get('tournament_id') == tournament_id and m.get('status') == 'in_progress'
+                   for m in matches):
+                raise StoreError('Finish the current tournament match before skipping another.')
+            state = tournament_state(tournament, matches)
+            pending = [f for f in state['fixtures']
+                       if not f['bye'] and f['result'] is None and f['live_match'] is None]
+            skipped = [value for value in tournament.get('skipped_fixtures', [])
+                       if any(f['id'] == value for f in pending)]
+            fixture = next((f for f in pending if f['id'] == fixture_id), None)
+            next_fixture = next((f for f in pending if f['id'] not in skipped), None)
+            if fixture is None or next_fixture is None or next_fixture['id'] != fixture_id:
+                raise StoreError('This match is no longer next. Refresh and try again.')
+            if len(pending) < 2:
+                raise StoreError('No other tournament match is available to play.')
+            skipped.append(fixture_id)
+            tournament['skipped_fixtures'] = skipped
             self._write('tournaments.csv', self.TOURNAMENT_FIELDS, tournaments)
             return players, matches, tournaments
 
@@ -389,6 +431,9 @@ class Store:
             tournament = next((t for t in tournaments if t['id'] == tournament_id), None)
             if tournament is None:
                 raise StoreError('Tournament not found. Refresh and try again.')
+            if any(m.get('tournament_id') == tournament_id and m.get('status') == 'in_progress'
+                   for m in matches):
+                raise StoreError('Finish the current tournament match before starting another.')
             state = tournament_state(tournament, matches)
             fixture = next((f for f in state['fixtures'] if f['id'] == fixture_id), None)
             if (fixture is None or fixture['bye'] or fixture['result'] is not None

@@ -67,6 +67,7 @@ fieldset { border: 1px solid #666666; padding: 14px; }
 .bracket-round-title { color: #aaaaaa; font-size: 12px; font-weight: 600; text-align: center; }
 .bracket-match { overflow: hidden; border: 1px solid #666666; background: #222222; }
 .bracket-match.is-ready { border-color: #aaaaaa; }
+.bracket-match.is-skipped { border-style: dashed; }
 .bracket-match.is-live { border-color: #aaaaaa; }
 .bracket-match-meta { display: flex; justify-content: space-between; gap: 8px; padding: 6px 9px; color: #aaaaaa; font-size: 11px; }
 .bracket-match-meta span { color: #dddddd; text-transform: uppercase; }

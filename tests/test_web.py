@@ -315,6 +315,38 @@ class WebTests(unittest.TestCase):
         completed_page = self.client.get(tournament_path).text
         self.assertNotIn('Next match', completed_page)
 
+    def test_tournament_next_match_can_be_skipped_and_started_later(self):
+        response = self.post('/tournaments', name='Queued cup', system='round_robin',
+                             participants=self.ids)
+        tournament_path = response.location
+        tournament = self.store.snapshot()[2][-1]
+        fixtures = [f for f in tournament_state(tournament, [])['fixtures']
+                    if not f['bye'] and not f['result']]
+        first, second = fixtures[:2]
+
+        page = self.client.get(tournament_path).text
+        self.assertIn('Skip for now', page)
+        next_card = page.split('<section class="next-match" id="next-match">', 1)[1].split('</section>', 1)[0]
+        names = {p['id']: p['name'] for p in self.store.snapshot()[0]}
+        self.assertIn(names[first['player1']], next_card)
+        self.assertEqual(self.post(tournament_path, action='skip', fixture_id=first['id']).status_code, 303)
+
+        updated = self.store.snapshot()[2][-1]
+        self.assertEqual(updated['skipped_fixtures'], [first['id']])
+        page = self.client.get(tournament_path).text
+        self.assertIn('Skipped for now', page)
+        self.assertIn('Play now', page)
+        next_card = page.split('<section class="next-match" id="next-match">', 1)[1].split('</section>', 1)[0]
+        self.assertIn(names[second['player1']], next_card)
+        other_client = self.app.test_client()
+        self.assertIn('Skipped for now', other_client.get(tournament_path).text)
+
+        live = self.post(tournament_path, action='start_live', fixture_id=first['id'],
+                         player1=first['player1'], player2=first['player2'])
+        self.assertEqual(live.status_code, 303)
+        self.assertIn('/live/', live.location)
+        self.assertIn('Current match', self.client.get(tournament_path).text)
+
     def test_all_tournament_systems_complete_and_reopen(self):
         for system in ('single', 'group_double', 'round_robin'):
             response = self.post('/tournaments', name=system, system=system, participants=self.ids, groups=2)

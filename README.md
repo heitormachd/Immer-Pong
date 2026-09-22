@@ -260,6 +260,9 @@ upgraded without changing their format when another tournament is created.
 
 The bracket displays all played and currently available rounds, with the next
 playable fixture highlighted. Later rounds appear once their prerequisites finish.
+If the highlighted match cannot be played yet, use **Skip for now** to move to
+another available fixture; skipped matches remain in the bracket and can be
+started with **Play now** later.
 Every actual tournament result appears in **Matches**, with its tournament name,
 and counts toward the global leaderboard and Elo in registration order.
 Participants are fixed at creation; a player retired afterward can still finish

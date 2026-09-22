@@ -325,6 +325,27 @@ class TournamentStorageTests(unittest.TestCase):
             self.save(tournament, fixture)
         self.assertEqual(len(self.store.snapshot()[1]), 1)
 
+    def test_tournament_fixture_can_be_skipped_and_is_shared(self):
+        tournament = self.create('round_robin', 4)
+        initial = ready(tournament_state(tournament, []))
+        first, second = initial[:2]
+
+        self.store.skip_tournament_match(tournament['id'], first['id'])
+        reloaded = Store(self.temp.name).snapshot()[2][-1]
+        self.assertEqual(reloaded['skipped_fixtures'], [first['id']])
+        self.assertEqual(ready(tournament_state(reloaded, []))[0]['id'], first['id'])
+
+        self.store.create_live_tournament_match(
+            tournament['id'], first['id'], None, (first['player1'], first['player2']))
+        with self.assertRaisesRegex(StoreError, 'current tournament match'):
+            self.store.skip_tournament_match(tournament['id'], second['id'])
+
+    def test_single_available_tournament_fixture_cannot_be_skipped(self):
+        tournament = self.create('single', 2)
+        fixture = ready(tournament_state(tournament, []))[0]
+        with self.assertRaisesRegex(StoreError, 'No other tournament match'):
+            self.store.skip_tournament_match(tournament['id'], fixture['id'])
+
     def test_registered_retired_player_can_finish_tournament(self):
         tournament = self.create('single', 2)
         self.store.set_active(self.ids[0], False)
