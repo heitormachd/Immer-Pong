@@ -63,7 +63,7 @@ def tournament_state(tournament, matches):
         raise ValueError('A tournament fixture has both a result and a live match')
     fixtures, tables = [], []
 
-    def game(key, stage, round_number, a, b):
+    def game(key, stage, round_number, a, b, field_size=None):
         result = results.get(key)
         live_match = live_matches.get(key)
         if result is not None and (result['player1'], result['player2']) != (a, b):
@@ -80,6 +80,17 @@ def tournament_state(tournament, matches):
         ) if result else None
         fixture = dict(id=key, stage=stage, round=round_number, player1=a, player2=b,
                        result=result, live_match=live_match, bye=bye, winner=winner)
+        def applies(rule):
+            if rule == 'all':
+                return True
+            threshold = {'final': 2, 'semi': 4, 'quarter': 8}.get(rule, 0)
+            return field_size is not None and field_size <= threshold
+
+        fixture['target_points'] = (tournament.get('alternate_target', 11)
+                                    if tournament.get('target_stage', 'all') != 'all'
+                                    and applies(tournament['target_stage'])
+                                    else tournament.get('target_points', 7))
+        fixture['best_of'] = 3 if applies(tournament.get('bo3_stage', 'none')) else 1
         fixtures.append(fixture)
         return fixture
 
@@ -89,7 +100,7 @@ def tournament_state(tournament, matches):
         pool = list(pool)
         if len(pool) % 2:
             pool.append(None)
-        games = [game(f'{key}-{i // 2 + 1}', stage, round_number, pool[i], pool[i + 1])
+        games = [game(f'{key}-{i // 2 + 1}', stage, round_number, pool[i], pool[i + 1], len(pool))
                  for i in range(0, len(pool), 2)]
         if any(g['winner'] is None for g in games):
             return None, None
@@ -186,7 +197,7 @@ def tournament_state(tournament, matches):
         if lower is None:
             return finish('Playoffs')
         number += 1
-    final = game('final', 'Grand final', 1, upper[0], lower[0])
+    final = game('final', 'Grand final', 1, upper[0], lower[0], 2)
     if final['winner'] is None:
         return finish('Grand final')
     return finish('Completed', final['winner'])

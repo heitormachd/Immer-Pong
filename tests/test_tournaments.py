@@ -202,6 +202,47 @@ class TournamentStorageTests(unittest.TestCase):
         return self.store.register_tournament_match(tournament['id'], fixture['id'], 11, 5,
                                                    (fixture['player1'], fixture['player2']))
 
+    def test_saved_stage_scoring_and_live_best_of_three(self):
+        tournament = self.store.create_tournament(
+            'Cup', 'single', self.ids[:4], target_points=7,
+            target_stage='final', alternate_target=2, bo3_stage='final')[2][-1]
+        tournament = self.store.snapshot()[2][-1]
+        for fixture in ready(tournament_state(tournament, [])):
+            self.assertEqual((fixture['target_points'], fixture['best_of']), (7, 1))
+            self.save(tournament, fixture)
+        fixture = ready(tournament_state(tournament, self.store.snapshot()[1]))[0]
+        self.assertEqual((fixture['target_points'], fixture['best_of']), (2, 3))
+        match = self.store.create_live_tournament_match(
+            tournament['id'], fixture['id'], None,
+            (fixture['player1'], fixture['player2']))[1][-1]
+        for revision in range(4):
+            self.store.score_live_match(match['id'], match['player1'], revision)
+        players, matches, tournaments = self.store.snapshot()
+        self.assertTrue(tournament_state(tournaments[-1], matches)['complete'])
+        self.assertEqual((matches[-1]['score1'], matches[-1]['score2']), (2, 0))
+        self.store.score_live_match(match['id'], None, 4)
+        self.assertFalse(tournament_state(tournament, self.store.snapshot()[1])['complete'])
+
+    def test_invalid_scoring_settings_rejected(self):
+        for settings in ({'target_points': 1}, {'target_stage': 'bad'},
+                         {'alternate_target': 1}, {'bo3_stage': 'bad'}):
+            with self.assertRaises(StoreError):
+                self.store.create_tournament('Cup', 'single', self.ids[:2], **settings)
+
+    def test_previous_tournament_schema_uses_default_scoring(self):
+        tournament = self.create()
+        path = Path(self.temp.name) / 'tournaments.csv'
+        with path.open(newline='') as handle:
+            rows = list(csv.DictReader(handle))
+        with path.open('w', newline='') as handle:
+            writer = csv.DictWriter(handle, fieldnames=Store.PREVIOUS_TOURNAMENT_FIELDS,
+                                    extrasaction='ignore')
+            writer.writeheader()
+            writer.writerows(rows)
+        loaded = self.store.snapshot()[2][-1]
+        self.assertEqual(loaded['format_version'], tournament['format_version'])
+        self.assertEqual((loaded['target_points'], loaded['bo3_stage']), (7, 'none'))
+
     def test_existing_csv_upgrades_only_when_saving(self):
         path = Path(self.temp.name) / 'matches.csv'
         with path.open('w', newline='') as handle:

@@ -14,7 +14,7 @@
 {% elif next_fixture %}
 <h3>{{ names[next_fixture.player1] }} <span>vs</span> {{ names[next_fixture.player2] }}</h3>
 <p>{{ next_fixture.stage }} · Round {{ next_fixture.round }}</p>
-<form method="post" class="row">{{ csrf() }}{{ hidden('action', 'start_live') }}{{ hidden('fixture_id', next_fixture.id) }}{{ hidden('player1', next_fixture.player1) }}{{ hidden('player2', next_fixture.player2) }}<label>Target<input type="number" name="target" min="2" value="7" required></label><button>Start live match</button></form>
+<form method="post" class="row">{{ csrf() }}{{ hidden('action', 'start_live') }}{{ hidden('fixture_id', next_fixture.id) }}{{ hidden('player1', next_fixture.player1) }}{{ hidden('player2', next_fixture.player2) }}<span>Target {{ next_fixture.target_points }} · {{ "Best of 3" if next_fixture.best_of == 3 else "Single game" }}</span><button>Start live match</button></form>
 {% endif %}
 </section>
 {% endif %}

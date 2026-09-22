@@ -231,7 +231,12 @@ def create_app(data_directory=None, url_prefix=""):
                     badge = saved
                 _, _, rows = store.create_tournament(
                     request.form.get('name', ''), system, request.form.getlist('participants'),
-                    groups, classification=classification, badge=badge)
+                    groups, classification=classification, badge=badge,
+                    target_points=integer('target') if 'target' in request.form else 7,
+                    target_stage='all' if system == 'round_robin' else request.form.get('target_stage', 'all'),
+                    alternate_target=integer('alternate_target') if system != 'round_robin' and 'alternate_target' in request.form else 11,
+                    bo3_stage=('all' if request.form.get('bo3_stage') == 'all' else 'none')
+                    if system == 'round_robin' else request.form.get('bo3_stage', 'none'))
             except StoreError:
                 if saved:
                     (directory / 'badges' / saved).unlink(missing_ok=True)
@@ -247,7 +252,7 @@ def create_app(data_directory=None, url_prefix=""):
             action = request.form.get('action')
             if action == 'start_live':
                 _, rows, _ = store.create_live_tournament_match(
-                    tournament_id, request.form.get('fixture_id'), integer('target'),
+                    tournament_id, request.form.get('fixture_id'), None,
                     (request.form.get('player1'), request.form.get('player2')))
                 return redirect(url_for('live', match_id=rows[-1]['id']), 303)
             elif action == 'result':

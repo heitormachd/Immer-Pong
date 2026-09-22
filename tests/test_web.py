@@ -223,10 +223,20 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.post(path, action='delete').status_code, 303)
         self.assertEqual(self.client.get(path).status_code, 404)
 
+    def test_round_robin_ignores_finals_scoring_options(self):
+        response = self.post('/tournaments', name='League', system='round_robin',
+                             participants=self.ids, target_stage='final',
+                             alternate_target='invalid', bo3_stage='final')
+        self.assertEqual(response.status_code, 303)
+        tournament = self.store.snapshot()[2][-1]
+        self.assertEqual(tournament['target_stage'], 'all')
+        self.assertEqual(tournament['bo3_stage'], 'none')
+        self.assertEqual(tournament['alternate_target'], 11)
+
     def test_tournament_matches_use_live_scoring_and_unlock_next_fixture(self):
         a, b = self.ids[:2]
         response = self.post('/tournaments', name='Live cup', system='single',
-                             participants=[a, b], groups=1)
+                             participants=[a, b], groups=1, target=2)
         tournament_path = response.location
         tournament = self.store.snapshot()[2][-1]
         fixture = next(f for f in tournament_state(tournament, [])["fixtures"]
@@ -239,7 +249,7 @@ class WebTests(unittest.TestCase):
         self.assertNotIn('<h4>Bracket</h4>', page.text)
 
         response = self.post(tournament_path, action='start_live', fixture_id=fixture['id'],
-                             player1=fixture['player1'], player2=fixture['player2'], target=2)
+                             player1=fixture['player1'], player2=fixture['player2'])
         self.assertEqual(response.status_code, 303)
         live_path = response.location
         self.assertIn('Open live score', self.client.get(tournament_path).text)

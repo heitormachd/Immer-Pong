@@ -10,7 +10,15 @@
 </section>
 <details class="box" {% if not tournaments %}open{% endif %}><summary>Create tournament</summary>
 <form method="post" enctype="multipart/form-data">{{ csrf() }}
-<div class="row"><label>Name<input name="name" required></label><label>System<select name="system" id="system">{% for key, label in systems.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select></label><label>Groups (group stage only)<input type="number" name="groups" id="groups" value="1" min="1" max="{{ [1, active|length // 2]|max }}" required></label></div>
+<div class="row"><label>Name<input name="name" required></label><label>System<select name="system" id="system">{% for key, label in systems.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select></label><label id="groups-field" hidden>Groups<input type="number" name="groups" id="groups" disabled value="1" min="1" max="{{ [1, active|length // 2]|max }}" required></label></div>
+<fieldset><legend>Match scoring</legend>
+<div class="row">
+<label>Target points<input type="number" name="target" min="2" value="7" required></label>
+<label id="target-stage-field">Target points apply to<select name="target_stage" id="target-stage"><option value="all">All matches</option><option value="final" selected>Differ in finals</option><option value="semi">Differ from semifinals onward</option><option value="quarter">Differ from quarterfinals onward</option></select></label>
+<label id="alternate-target-field">Alternative target points<input type="number" name="alternate_target" min="2" value="11" required></label>
+<label>Bo3 matches<select name="bo3_stage" id="bo3-stage"><option value="none">No matches</option><option value="final" selected>Only in finals</option><option value="semi">From semifinals onward</option><option value="quarter">From quarterfinals onward</option><option value="all">All matches</option></select></label>
+</div>
+</fieldset>
 <label>Classification<select name="classification" id="classification" required><option value="minor">Minor</option><option value="major">Major</option></select></label>
 <p class="muted">Minor: play matches without a title achievement. Major: the winner earns a badge in Player Stats.</p>
 <fieldset id="tournament-badge-options" hidden disabled><legend>Tournament badge</legend><div class="badge-options">
@@ -18,7 +26,7 @@
 </div><label>Upload an image<input type="file" name="image" accept="image/png,image/jpeg,image/webp" aria-describedby="image-help"></label>
 <p class="muted" id="image-help">Optional PNG, JPEG, or WebP, up to 5 MB and 16 million pixels. An upload replaces the selected trophy.</p></fieldset>
 <fieldset><legend>Players</legend><div class="participants">{% for p in active %}<label><input type="checkbox" name="participants" value="{{ p.id }}">{{ p.name }}</label>{% else %}<p>Add active players first.</p>{% endfor %}</div></fieldset>
-<p class="muted">Group-stage double elimination: group winners enter the upper bracket; everyone else enters the lower bracket. Seeds use group placing, wins, point difference, points scored, then draw order. First-round byes favor the best seeds in each bracket.</p>
+<p id="tournament-errors" class="form-error" role="status" aria-live="polite"></p>
 <button {% if active|length < 2 %}disabled{% endif %}>Create tournament</button>
 </form></details>
 <details class="box"><summary>Tournament history</summary>

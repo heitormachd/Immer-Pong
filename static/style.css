@@ -125,3 +125,6 @@ details > .table-scroll { margin-top: 16px; margin-bottom: 0; }
 .achievement { max-width: 200px; text-align: center; overflow-wrap: anywhere; text-decoration: none; }
 .achievement:hover { border-color: #e8b94f; }
 .classification { color: #aaa; font-size: 12px; }
+
+[hidden] { display: none !important; }
+.form-error { color: #ff8585; }

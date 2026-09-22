@@ -34,6 +34,27 @@ def concurrent_point(directory, match_id, player, queue):
 
 
 class LiveRulesTests(unittest.TestCase):
+    def test_best_of_three_resets_games_and_undo_reopens_decider(self):
+        match = raw_match('A' * 7 + 'B' * 7 + 'A' * 7)
+        match['best_of'] = 3
+        state = live_state(match)
+        self.assertEqual((state['winner'], state['score1'], state['score2']), ('A', 2, 1))
+        self.assertEqual(state['history'][-1]['game'], 3)
+        match['point_log'].pop()
+        state = live_state(match)
+        self.assertIsNone(state['winner'])
+        self.assertEqual(state['games'], (1, 1))
+        self.assertEqual(state['game_score'], (6, 0))
+
+    def test_best_of_three_overtime_resets_for_next_game(self):
+        match = raw_match('AB' * 6 + 'AA')
+        match['best_of'] = 3
+        state = live_state(match)
+        self.assertIsNone(state['winner'])
+        self.assertEqual(state['games'], (1, 0))
+        self.assertEqual(state['game_score'], (0, 0))
+        self.assertEqual(state['overtime_round'], 0)
+
     def test_normal_finish_and_no_points_after_winner(self):
         for target in (2, 7, 11):
             with self.subTest(target=target):

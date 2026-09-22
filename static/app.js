@@ -42,9 +42,42 @@ if (matchForm) {
 }
 const system = document.querySelector('#system');
 if (system) {
-  const updateGroups = () => { document.querySelector('#groups').disabled = system.value !== 'group_double'; };
-  system.addEventListener('change', updateGroups);
-  updateGroups();
+  const form = system.form;
+  const groups = document.querySelector('#groups');
+  const targetStage = document.querySelector('#target-stage');
+  const alternate = document.querySelector('#alternate-target-field');
+  const bo3Stage = document.querySelector('#bo3-stage');
+  const errors = document.querySelector('#tournament-errors');
+  const updateTournament = () => {
+    const grouped = system.value === 'group_double';
+    groups.disabled = !grouped;
+    document.querySelector('#groups-field').hidden = !grouped;
+    const roundRobin = system.value === 'round_robin';
+    document.querySelector('#target-stage-field').hidden = roundRobin;
+    targetStage.disabled = roundRobin;
+    for (const option of bo3Stage.options) {
+      const finalsOnly = !['none', 'all'].includes(option.value);
+      option.hidden = roundRobin && finalsOnly;
+      option.disabled = roundRobin && finalsOnly;
+    }
+    if (roundRobin && !['none', 'all'].includes(bo3Stage.value)) bo3Stage.value = 'none';
+    alternate.hidden = roundRobin || targetStage.value === 'all';
+    alternate.querySelector('input').disabled = alternate.hidden;
+    const count = form.querySelectorAll('[name="participants"]:checked').length;
+    const messages = [];
+    if (count < 2) messages.push('Select at least two players.');
+    if (system.value === 'single' && count % 2) messages.push('Single-elimination requires an even number of players.');
+    if (grouped && count < 4) messages.push('Group-stage double elimination requires at least four players.');
+    if (grouped && (!Number.isInteger(Number(groups.value)) || Number(groups.value) < 1 || Number(groups.value) > Math.floor(count / 2))) messages.push('Each group must have at least two players.');
+    form.querySelectorAll('[name="target"], [name="alternate_target"]').forEach(input => {
+      if (!input.disabled && (!Number.isInteger(Number(input.value)) || Number(input.value) < 2)) messages.push('Target points must be whole numbers of at least 2.');
+    });
+    errors.textContent = messages.join(' ');
+    form.querySelector('button').disabled = messages.length > 0;
+  };
+  form.addEventListener('input', updateTournament);
+  form.addEventListener('change', updateTournament);
+  updateTournament();
 }
 
 document.querySelectorAll('[data-stats-form] select').forEach(select => {

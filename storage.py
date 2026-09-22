@@ -27,9 +27,11 @@ class Store:
     LEGACY_MATCH_FIELDS = ('id', 'timestamp', 'player1', 'player2', 'score1', 'score2')
     TOURNAMENT_MATCH_FIELDS = (*LEGACY_MATCH_FIELDS, 'tournament_id', 'fixture_id')
     LIVE_MATCH_FIELDS = (*TOURNAMENT_MATCH_FIELDS, 'target_points', 'point_log', 'status', 'revision')
-    MATCH_FIELDS = (*LIVE_MATCH_FIELDS, 'elo1_before', 'elo2_before')
+    PREVIOUS_MATCH_FIELDS = (*LIVE_MATCH_FIELDS, 'elo1_before', 'elo2_before')
+    MATCH_FIELDS = (*PREVIOUS_MATCH_FIELDS, 'best_of')
     LEGACY_TOURNAMENT_FIELDS = ('id', 'name', 'system', 'created_at', 'players', 'groups', 'classification', 'badge')
-    TOURNAMENT_FIELDS = (*LEGACY_TOURNAMENT_FIELDS, 'format_version')
+    PREVIOUS_TOURNAMENT_FIELDS = (*LEGACY_TOURNAMENT_FIELDS, 'format_version')
+    TOURNAMENT_FIELDS = (*PREVIOUS_TOURNAMENT_FIELDS, 'target_points', 'target_stage', 'alternate_target', 'bo3_stage')
 
     def __init__(self, directory):
         self.directory = Path(directory)
@@ -54,9 +56,10 @@ class Store:
                 reader = csv.DictReader(handle, strict=True)
                 legacy = name == 'matches.csv' and reader.fieldnames in (
                     list(self.LEGACY_MATCH_FIELDS), list(self.TOURNAMENT_MATCH_FIELDS),
-                    list(self.LIVE_MATCH_FIELDS))
+                    list(self.LIVE_MATCH_FIELDS), list(self.PREVIOUS_MATCH_FIELDS))
                 legacy_tournaments = (name == 'tournaments.csv'
-                                      and reader.fieldnames == list(self.LEGACY_TOURNAMENT_FIELDS))
+                                      and reader.fieldnames in (list(self.LEGACY_TOURNAMENT_FIELDS),
+                                                                list(self.PREVIOUS_TOURNAMENT_FIELDS)))
                 if reader.fieldnames != list(fields) and not legacy and not legacy_tournaments:
                     raise ValueError(f'Unexpected columns in {name}')
                 rows = list(reader)
@@ -72,7 +75,8 @@ class Store:
                             row.setdefault(key, value)
                 if legacy_tournaments:
                     for row in rows:
-                        row['format_version'] = '1'
+                        row.setdefault('format_version', '1')
+                        row.update(target_points='7', target_stage='all', alternate_target='11', bo3_stage='none')
                 return rows
         except FileNotFoundError:
             return []
@@ -96,6 +100,10 @@ class Store:
             for tournament in tournaments:
                 tournament['players'] = json.loads(tournament['players'])
                 tournament['groups'] = int(tournament['groups'])
+                for field in ('target_points', 'alternate_target'):
+                    tournament[field] = int(tournament[field])
+                self._validate_scoring(tournament['target_points'], tournament['target_stage'],
+                                       tournament['alternate_target'], tournament['bo3_stage'])
                 tournament['format_version'] = int(tournament['format_version'])
                 if tournament['format_version'] not in (1, 2):
                     raise ValueError('Unknown tournament format version')
@@ -123,6 +131,7 @@ class Store:
                     raise ValueError('Match timestamps must be UTC')
                 if match['player1'] not in ids or match['player2'] not in ids:
                     raise ValueError('Match references a missing player')
+                match['best_of'] = int(match.get('best_of') or 1)
                 match['score1'] = int(match['score1'])
                 match['score2'] = int(match['score2'])
                 match['target_points'] = int(match['target_points']) if match['target_points'] else None
@@ -171,6 +180,8 @@ class Store:
 
     def _write(self, name, fields, rows):
         if name == 'matches.csv':
+            for row in rows:
+                row.setdefault('best_of', 1)
             rebuild_match_elos(rows)
         temporary = None
         try:
@@ -304,12 +315,21 @@ class Store:
         if classification == 'major' and not valid_badge(badge):
             raise StoreError('Choose a valid tournament badge.')
 
+    @staticmethod
+    def _validate_scoring(target_points, target_stage, alternate_target, bo3_stage):
+        if any(type(value) is not int or value < 2 for value in (target_points, alternate_target)):
+            raise StoreError('Choose targets of at least 2 points.')
+        if target_stage not in ('all', 'final', 'semi', 'quarter') or bo3_stage not in ('none', 'final', 'semi', 'quarter', 'all'):
+            raise StoreError('Choose valid match scoring options.')
+
     def create_tournament(self, name, system, participants, groups=1,
-                          classification='minor', badge='cup'):
+                          classification='minor', badge='cup', target_points=7, target_stage='all',
+                          alternate_target=11, bo3_stage='none'):
         name = name.strip()
         if not name:
             raise StoreError('Enter a tournament name.')
         self._validate_tournament(system, participants, groups)
+        self._validate_scoring(target_points, target_stage, alternate_target, bo3_stage)
         if classification == 'minor':
             badge = ''
         self._validate_identity(classification, badge)
@@ -322,7 +342,8 @@ class Store:
             tournaments.append(dict(id=uuid.uuid4().hex, name=name, system=system,
                                     created_at=datetime.now(timezone.utc).isoformat(),
                                     players=seeds, groups=groups, classification=classification, badge=badge,
-                                    format_version=2))
+                                    format_version=2, target_points=target_points, target_stage=target_stage,
+                                    alternate_target=alternate_target, bo3_stage=bo3_stage))
             self._write('tournaments.csv', self.TOURNAMENT_FIELDS, tournaments)
             return players, matches, tournaments
 
@@ -354,7 +375,7 @@ class Store:
             return players, matches, tournaments
 
     def create_live_tournament_match(self, tournament_id, fixture_id, target_points, expected_players):
-        if type(target_points) is not int or target_points < 2:
+        if target_points is not None and (type(target_points) is not int or target_points < 2):
             raise StoreError('Choose a target of at least 2 points.')
         with self._locked():
             players, matches, tournaments = self._load()
@@ -371,7 +392,8 @@ class Store:
             matches.append(dict(id=uuid.uuid4().hex, timestamp=datetime.now(timezone.utc).isoformat(),
                                 player1=fixture['player1'], player2=fixture['player2'], score1=0, score2=0,
                                 tournament_id=tournament_id, fixture_id=fixture_id,
-                                target_points=target_points, point_log=[], status='in_progress', revision=0))
+                                target_points=fixture['target_points'], best_of=fixture['best_of'],
+                                point_log=[], status='in_progress', revision=0))
             self._write('matches.csv', self.MATCH_FIELDS, matches)
             return players, matches, tournaments
 
