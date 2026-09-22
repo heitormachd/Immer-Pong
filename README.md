@@ -233,12 +233,9 @@ Player Stats includes a Clutch score computed from complete point histories.
 - **Single-Elimination:** an even number of players, minimum two. A loss eliminates
   a player. Non-power-of-two fields (such as six) get first-round byes.
 - **Double-Elimination with Group stage:** any number of players, minimum four.
-  With an odd count, everyone plays the group stage. The best player across all
-  groups receives a first-round upper-bracket bye, ranked by wins, point difference,
-  points scored, then saved draw order.
   Choose the number of groups; every group must contain at least two players.
-  Each group plays a single round-robin. Its top half, rounded up for odd-sized
-  groups, enters the upper bracket; the rest enters the lower bracket with one
+  Each group plays a single round-robin. Only its winner enters the upper
+  bracket; everyone else enters the lower bracket with one
   playoff loss. Group losses do not otherwise carry into the playoffs. Upper
   losers drop into lower; a lower-bracket loss eliminates the player. There is
   **one grand final, with no reset**, even if the lower-bracket finalist wins.
@@ -248,12 +245,18 @@ Player Stats includes a Clutch score computed from complete point histories.
 The draw is randomized once at creation and saved. Groups are balanced by
 distributing the draw in turn across groups. Group and round-robin tables sort
 by wins, point difference, points scored, then saved draw order. The last tie
-breaker is stable across renames. Playoff seeding uses group placing then group
-number. Initial upper-bracket seeds get byes as needed; lower brackets can also
-have byes. Each upper round runs alongside a lower elimination round, followed
+breaker is stable across renames. Playoff seeding uses group placing, wins, point
+difference, points scored, then saved draw order. Both brackets award first-round
+byes to their best seeds as needed. With nine players in three groups, the three
+winners fill a four-slot upper bracket (one bye); the other six enter the lower
+bracket, where the two best runners-up receive byes. Each upper round runs alongside a lower elimination round, followed
 by a lower round mixing its survivors with the upper losers. Further lower rounds
 are played if needed to determine a finalist. Byes are not matches and do not
 affect Elo.
+
+Existing tournaments retain their original qualification and seeding rules. New
+tournaments save `format_version=2`; older CSV rows default to version 1 and are
+upgraded without changing their format when another tournament is created.
 
 The bracket displays all played and currently available rounds, with the next
 playable fixture highlighted. Later rounds appear once their prerequisites finish.

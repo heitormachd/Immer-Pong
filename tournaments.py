@@ -46,8 +46,8 @@ def tournament_state(tournament, matches):
     """Return played fixtures, byes, ready fixtures, standings and champion.
 
     New elimination rounds unlock only after their prerequisite rounds finish.
-    A group's lower half starts playoffs with one loss; group losses themselves
-    do not count as elimination losses.
+    Lower-bracket entrants start playoffs with one loss; group losses themselves
+    do not count as elimination losses. Saved format versions preserve old draws.
     """
     recorded = [m for m in matches if m.get('tournament_id') == tournament['id']
                 and m.get('status', 'completed') == 'completed']
@@ -107,6 +107,7 @@ def tournament_state(tournament, matches):
 
     players = tournament['players']
     system = tournament['system']
+    winners_only = system == 'group_double' and tournament.get('format_version', 1) >= 2
     if system in ('round_robin', 'group_double'):
         groups = [players] if system == 'round_robin' else [
             players[i::tournament['groups']] for i in range(tournament['groups'])]
@@ -126,12 +127,24 @@ def tournament_state(tournament, matches):
         for rank in range(max(len(t['rows']) for t in tables)):
             for table in tables:
                 if rank < len(table['rows']):
-                    target = upper if rank < (len(table['rows']) + 1) // 2 else lower
+                    cutoff = 1 if winners_only else (len(table['rows']) + 1) // 2
+                    target = upper if rank < cutoff else lower
                     target.append(table['rows'][rank]['player'])
+        if winners_only:
+            # Group placing takes priority, followed by performance across groups.
+            seeds = sorted(((rank, row) for table in tables
+                            for rank, row in enumerate(table['rows'])),
+                           key=lambda item: (item[0], -item[1]['wins'],
+                                             -(item[1]['scored'] - item[1]['conceded']),
+                                             -item[1]['scored'], players.index(item[1]['player'])))
+            upper = [row['player'] for rank, row in seeds if rank == 0]
+            lower = seed_bracket([row['player'] for rank, row in seeds if rank > 0])
     else:
         upper, lower = players, []
 
-    if system == 'group_double' and len(players) % 2:
+    if winners_only:
+        upper = seed_bracket(upper) if len(upper) > 1 else upper
+    elif system == 'group_double' and len(players) % 2:
         best = min((row for table in tables for row in table['rows']),
                    key=lambda row: (-row['wins'], -(row['scored'] - row['conceded']),
                                     -row['scored'], players.index(row['player'])))['player']

@@ -18,7 +18,7 @@
 </div><label>Upload an image<input type="file" name="image" accept="image/png,image/jpeg,image/webp" aria-describedby="image-help"></label>
 <p class="muted" id="image-help">Optional PNG, JPEG, or WebP, up to 5 MB and 16 million pixels. An upload replaces the selected trophy.</p></fieldset>
 <fieldset><legend>Players</legend><div class="participants">{% for p in active %}<label><input type="checkbox" name="participants" value="{{ p.id }}">{{ p.name }}</label>{% else %}<p>Add active players first.</p>{% endfor %}</div></fieldset>
-<p class="muted">Group-stage double elimination accepts odd player counts: the best player across the groups receives a first-round upper-bracket bye, based on wins, point difference, points scored, then draw order.</p>
+<p class="muted">Group-stage double elimination: group winners enter the upper bracket; everyone else enters the lower bracket. Seeds use group placing, wins, point difference, points scored, then draw order. First-round byes favor the best seeds in each bracket.</p>
 <button {% if active|length < 2 %}disabled{% endif %}>Create tournament</button>
 </form></details>
 <details class="box"><summary>Tournament history</summary>

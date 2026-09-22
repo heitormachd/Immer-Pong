@@ -249,10 +249,11 @@ class WebTests(unittest.TestCase):
             self.assertEqual(self.client.get('/tournaments').status_code, 200)
 
     def test_odd_group_double_creation_and_playoff_bye(self):
-        self.store.save_player('Eve')
+        for name in ('Eve', 'Frank', 'Grace', 'Helen', 'Ivan'):
+            self.store.save_player(name)
         ids = [p['id'] for p in self.store.snapshot()[0]]
         response = self.post('/tournaments', name='Odd cup', system='group_double',
-                             participants=ids, groups=2)
+                             participants=ids, groups=3)
         self.assertEqual(response.status_code, 303, response.text)
         tournament = self.store.snapshot()[2][-1]
         for fixture in tournament_state(tournament, [])['fixtures']:

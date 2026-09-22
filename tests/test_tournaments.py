@@ -146,6 +146,45 @@ class ScheduleTests(unittest.TestCase):
                    for f in initial['fixtures']]
         self.assertEqual(tournament_state(tournament, matches)['champion'], '0')
 
+    def test_winners_only_format_completes_with_correct_loss_routing(self):
+        for count in range(4, 18):
+            for groups in range(1, count // 2 + 1):
+                with self.subTest(count=count, groups=groups):
+                    tournament = dict(self.tournament('group_double', count, groups), format_version=2)
+                    state, matches = play(tournament, count * groups)
+                    losses = {row['player']: int(rank > 0) for table in state['tables']
+                              for rank, row in enumerate(table['rows'])}
+                    stages = {f['id']: f['stage'] for f in state['fixtures']}
+                    for match in matches:
+                        stage = stages[match['fixture_id']]
+                        if stage.startswith('Group'):
+                            continue
+                        a, b = match['player1'], match['player2']
+                        expected = (0, 0) if stage == 'Upper bracket' else (
+                            (0, 1) if stage == 'Grand final' else (1, 1))
+                        self.assertEqual((losses[a], losses[b]), expected)
+                        losses[b if match['score1'] > match['score2'] else a] += 1
+                    self.assertTrue(state['complete'])
+                    self.assertEqual(sum(f['stage'] == 'Grand final' for f in state['fixtures']), 1)
+
+    def test_three_group_winners_and_six_lower_entrants_seeded_by_performance(self):
+        tournament = dict(self.tournament('group_double', 9, 3), format_version=2)
+        # Winners and runners-up rank group 3, then 2, then 1; draw order differs.
+        results = []
+        for fixture in tournament_state(tournament, [])['fixtures']:
+            a, b = int(fixture['player1']), int(fixture['player2'])
+            result = record(tournament, fixture, a < b)
+            losing_score = 0 if min(a, b) < 3 and max(a, b) < 6 else 2 - a % 3
+            result['score1'], result['score2'] = (7, losing_score) if a < b else (losing_score, 7)
+            results.append(result)
+        state = tournament_state(tournament, results)
+        upper = [f for f in state['fixtures'] if f['stage'] == 'Upper bracket']
+        lower = [f for f in state['fixtures'] if f['stage'] == 'Lower bracket']
+        self.assertEqual([(f['player1'], f['player2']) for f in upper], [('2', None), ('1', '0')])
+        self.assertEqual({f['winner'] for f in lower if f['bye']}, {'5', '4'})
+        self.assertEqual({frozenset((f['player1'], f['player2'])) for f in lower if not f['bye']},
+                         {frozenset(('3', '8')), frozenset(('6', '7'))})
+
 
 class TournamentStorageTests(unittest.TestCase):
     def setUp(self):
@@ -191,6 +230,27 @@ class TournamentStorageTests(unittest.TestCase):
         self.store.set_active(self.ids[0], False)
         with self.assertRaises(StoreError):
             self.create()
+
+    def test_old_tournament_format_survives_creation_and_csv_upgrade(self):
+        tournament = dict(id='legacy', name='Old cup', system='group_double',
+                          created_at='2026-09-22T00:00:00+00:00', players=self.ids[:5],
+                          groups=2, classification='minor', badge='')
+        self.store._write('tournaments.csv', Store.LEGACY_TOURNAMENT_FIELDS, [tournament])
+        before = (Path(self.temp.name) / 'tournaments.csv').read_bytes()
+        state, results = play(tournament)
+        for result in results:
+            self.store.register_tournament_match('legacy', result['fixture_id'],
+                                                result['score1'], result['score2'],
+                                                (result['player1'], result['player2']))
+        old = self.store.snapshot()[2][0]
+        self.assertEqual(old['format_version'], 1)
+        self.assertEqual((Path(self.temp.name) / 'tournaments.csv').read_bytes(), before)
+        self.assertEqual(self.create('group_double', 5, 2)['format_version'], 2)
+        _, matches, events = Store(self.temp.name).snapshot()
+        rebuilt = tournament_state(events[0], matches)
+        self.assertEqual(rebuilt['champion'], state['champion'])
+        self.assertEqual([(f['id'], f['player1'], f['player2'], f['winner']) for f in rebuilt['fixtures']],
+                         [(f['id'], f['player1'], f['player2'], f['winner']) for f in state['fixtures']])
 
     def test_completion_reopen_and_global_elo(self):
         tournament = self.create('group_double', 5, 2)

@@ -28,7 +28,8 @@ class Store:
     TOURNAMENT_MATCH_FIELDS = (*LEGACY_MATCH_FIELDS, 'tournament_id', 'fixture_id')
     LIVE_MATCH_FIELDS = (*TOURNAMENT_MATCH_FIELDS, 'target_points', 'point_log', 'status', 'revision')
     MATCH_FIELDS = (*LIVE_MATCH_FIELDS, 'elo1_before', 'elo2_before')
-    TOURNAMENT_FIELDS = ('id', 'name', 'system', 'created_at', 'players', 'groups', 'classification', 'badge')
+    LEGACY_TOURNAMENT_FIELDS = ('id', 'name', 'system', 'created_at', 'players', 'groups', 'classification', 'badge')
+    TOURNAMENT_FIELDS = (*LEGACY_TOURNAMENT_FIELDS, 'format_version')
 
     def __init__(self, directory):
         self.directory = Path(directory)
@@ -54,7 +55,9 @@ class Store:
                 legacy = name == 'matches.csv' and reader.fieldnames in (
                     list(self.LEGACY_MATCH_FIELDS), list(self.TOURNAMENT_MATCH_FIELDS),
                     list(self.LIVE_MATCH_FIELDS))
-                if reader.fieldnames != list(fields) and not legacy:
+                legacy_tournaments = (name == 'tournaments.csv'
+                                      and reader.fieldnames == list(self.LEGACY_TOURNAMENT_FIELDS))
+                if reader.fieldnames != list(fields) and not legacy and not legacy_tournaments:
                     raise ValueError(f'Unexpected columns in {name}')
                 rows = list(reader)
                 if any(set(row) != set(reader.fieldnames) or any(v is None for v in row.values())
@@ -67,6 +70,9 @@ class Store:
                         for key, value in dict(target_points='', point_log='[]',
                                                status='completed', revision='0').items():
                             row.setdefault(key, value)
+                if legacy_tournaments:
+                    for row in rows:
+                        row['format_version'] = '1'
                 return rows
         except FileNotFoundError:
             return []
@@ -90,6 +96,9 @@ class Store:
             for tournament in tournaments:
                 tournament['players'] = json.loads(tournament['players'])
                 tournament['groups'] = int(tournament['groups'])
+                tournament['format_version'] = int(tournament['format_version'])
+                if tournament['format_version'] not in (1, 2):
+                    raise ValueError('Unknown tournament format version')
                 participants = tournament['players']
                 self._validate_identity(tournament['classification'], tournament['badge'])
                 if (not tournament['id'] or tournament['id'] in tournament_ids
@@ -312,7 +321,8 @@ class Store:
             random.SystemRandom().shuffle(seeds)
             tournaments.append(dict(id=uuid.uuid4().hex, name=name, system=system,
                                     created_at=datetime.now(timezone.utc).isoformat(),
-                                    players=seeds, groups=groups, classification=classification, badge=badge))
+                                    players=seeds, groups=groups, classification=classification, badge=badge,
+                                    format_version=2))
             self._write('tournaments.csv', self.TOURNAMENT_FIELDS, tournaments)
             return players, matches, tournaments
 
