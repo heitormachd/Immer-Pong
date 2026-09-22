@@ -9,13 +9,13 @@
 </head>
 <body>
 <main class="window">
-  <header><h1>Ping-pong{% if config.TEST_SITE %} · Test server{% endif %}</h1><a class="button" href="{{ request.script_root }}{{ request.path }}">Refresh</a></header>
+  <header><h1>Ping-pong{% if config.TEST_SITE %} · Test server{% endif %}</h1>{% if tab %}<span class="loss" id="refresh-status" role="status"></span><noscript><a href="{{ request.url }}">Refresh</a></noscript>{% endif %}</header>
   <nav aria-label="Main tabs">
   {% for endpoint, label in [('matches', 'Matches'), ('leaderboards', 'Leaderboards'), ('players', 'Players'), ('tournaments', 'Tournaments'), ('stats', 'Stats')] %}
     <a href="{{ url_for(endpoint) }}" {% if tab == endpoint %}aria-current="page"{% endif %}>{{ label }}</a>
   {% endfor %}
   </nav>
-  <section class="panel">{% block content %}{% endblock %}</section>
+  <section class="panel"{% if tab %} data-changes-url="{{ url_for('changes') }}" data-version="{{ g.data_version }}"{% endif %}>{% block content %}{% endblock %}</section>
 </main>
 </body>
 </html>

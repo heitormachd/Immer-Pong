@@ -4,7 +4,7 @@ from pathlib import Path
 import secrets
 import hashlib
 
-from flask import Flask, abort, redirect, render_template, request, session, url_for, send_from_directory
+from flask import Flask, abort, g, redirect, render_template, request, session, url_for, send_from_directory
 
 from werkzeug.exceptions import NotFound
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
@@ -37,6 +37,17 @@ def create_app(data_directory=None, url_prefix=""):
     store.migrate_elo()
     app.extensions['store'] = store
 
+    def data_version():
+        stamps = []
+        for name in ('players.csv', 'matches.csv', 'tournaments.csv'):
+            try:
+                stat = (directory / name).stat()
+                stamps.append((stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns))
+            except FileNotFoundError:
+                stamps.append(None)
+        # A restart also requires fresh forms, since the CSRF secret changes.
+        return hashlib.sha256((app.config['SECRET_KEY'] + repr(stamps)).encode()).hexdigest()
+
     @app.before_request
     def protect_forms():
         if request.method == 'POST':
@@ -44,6 +55,13 @@ def create_app(data_directory=None, url_prefix=""):
             if not token or not secrets.compare_digest(token.encode(), request.form.get('csrf', '').encode()):
                 abort(400, 'This form expired. Refresh the page and try again.')
         session.setdefault('csrf', secrets.token_hex(32))
+        if request.method == 'GET' and request.endpoint not in ('static', 'uploaded_badge', 'changes'):
+            # Capture before reading data so a concurrent change is never missed.
+            g.data_version = data_version()
+
+    @app.get('/changes')
+    def changes():
+        return {'version': data_version()}
 
     @app.after_request
     def headers(response):

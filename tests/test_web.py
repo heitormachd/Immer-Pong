@@ -29,6 +29,36 @@ class WebTests(unittest.TestCase):
     def ledger(self):
         return {p.name: p.read_bytes() for p in Path(self.temp.name).glob('*.csv')}
 
+    def test_change_checks_do_not_load_or_lock_the_ledger(self):
+        before = self.ledger()
+        with patch.object(self.store, '_load', side_effect=AssertionError('CSV read')):
+            with patch.object(self.store, '_locked', side_effect=AssertionError('Lock acquired')):
+                first = self.client.get('/changes')
+                second = self.client.get('/changes')
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.json, second.json)
+        self.assertEqual(first.headers['Cache-Control'], 'no-store')
+        self.assertEqual(before, self.ledger())
+        self.assertIn(f'data-version="{first.json["version"]}"', self.client.get('/').text)
+
+    def test_change_checks_detect_each_ledger_and_restart(self):
+        version = self.client.get('/changes').json['version']
+        for mutate in (
+            lambda: self.store.save_player('Eve'),
+            lambda: self.store.register(self.ids[0], self.ids[1], 7, 1),
+            lambda: self.post('/tournaments', name='Cup', system='single', participants=self.ids[:2]),
+            lambda: (Path(self.temp.name) / 'tournaments.csv').unlink(),
+        ):
+            mutate()
+            updated = self.client.get('/changes').json['version']
+            self.assertNotEqual(version, updated)
+            version = updated
+        # Use a separate valid empty ledger to check restart invalidation.
+        directory = Path(self.temp.name) / 'restart'
+        first = create_app(directory).test_client().get('/changes').json
+        second = create_app(directory).test_client().get('/changes').json
+        self.assertNotEqual(first, second)
+
     def test_pages_are_read_only_and_escape_names(self):
         self.store.save_player('<script>alert(1)</script>')
         before = self.ledger()
@@ -394,6 +424,8 @@ class WebTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertIn(f'href="{prefix}/players"', response.text)
             self.assertIn(f'href="{prefix}/static/style.css"', response.text)
+            self.assertIn(f'data-changes-url="{prefix}/changes"', response.text)
+            self.assertEqual(client.get(prefix + '/changes').status_code, 200)
             self.assertIn(f'Path={prefix}/', response.headers['Set-Cookie'])
             token = re.search(r'name="csrf" value="([^"]+)"', response.text)[1]
             result = client.post(prefix + '/players', data=dict(csrf=token, action='add', name=prefix))
