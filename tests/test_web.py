@@ -248,6 +248,24 @@ class WebTests(unittest.TestCase):
             self.assertFalse(tournament_state(tournament, self.store.snapshot()[1])['complete'])
             self.assertEqual(self.client.get('/tournaments').status_code, 200)
 
+    def test_odd_group_double_creation_and_playoff_bye(self):
+        self.store.save_player('Eve')
+        ids = [p['id'] for p in self.store.snapshot()[0]]
+        response = self.post('/tournaments', name='Odd cup', system='group_double',
+                             participants=ids, groups=2)
+        self.assertEqual(response.status_code, 303, response.text)
+        tournament = self.store.snapshot()[2][-1]
+        for fixture in tournament_state(tournament, [])['fixtures']:
+            self.store.register_tournament_match(tournament['id'], fixture['id'], 7, 2,
+                                                 (fixture['player1'], fixture['player2']))
+        state = tournament_state(tournament, self.store.snapshot()[1])
+        bye = next(f for f in state['fixtures'] if f['id'] == 'u1-1')
+        self.assertTrue(bye['bye'])
+        page = self.client.get(response.location)
+        self.assertEqual(page.status_code, 200)
+        self.assertIn('Bye', page.text)
+        self.assertIn('Next match', page.text)
+
     def test_major_titles_only_awarded_to_champion_and_removed_on_undo(self):
         a, b = self.ids[:2]
         for classification in ('minor', 'major'):

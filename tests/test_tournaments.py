@@ -83,7 +83,7 @@ class ScheduleTests(unittest.TestCase):
                     self.assertEqual(set(losses.values()), {1})
 
     def test_group_double_elimination_loss_routing_and_one_final(self):
-        for count in range(4, 18, 2):
+        for count in range(4, 18):
             for groups in range(1, count // 2 + 1):
                 with self.subTest(count=count, groups=groups):
                     tournament = self.tournament('group_double', count, groups)
@@ -115,6 +115,27 @@ class ScheduleTests(unittest.TestCase):
                     self.assertEqual(len(finals), 1)
                     self.assertEqual(state['champion'], finals[0]['winner'])
                     self.assertFalse(any(f['id'] == 'reset' for f in state['fixtures']))
+                    if count % 2:
+                        rows = [row for table in state['tables'] for row in table['rows']]
+                        self.assertEqual({row['player'] for row in rows}, set(tournament['players']))
+                        best = min(rows, key=lambda row: (-row['wins'],
+                                   -(row['scored'] - row['conceded']), -row['scored'],
+                                   tournament['players'].index(row['player'])))['player']
+                        bye = next(f for f in state['fixtures'] if f['id'] == 'u1-1')
+                        self.assertTrue(bye['bye'])
+                        self.assertEqual(bye['winner'], best)
+
+    def test_odd_group_bye_uses_group_performance_not_draw_seed(self):
+        tournament = self.tournament('group_double', 5, 2)
+        initial = tournament_state(tournament, [])
+        # The last entrant beats both group opponents; the first seed loses.
+        matches = [record(tournament, f, f['player1'] == '4' or
+                          (f['player2'] != '4' and f['player1'] != '0'))
+                   for f in initial['fixtures']]
+        state = tournament_state(tournament, matches)
+        bye = next(f for f in state['fixtures'] if f['id'] == 'u1-1')
+        self.assertTrue(bye['bye'])
+        self.assertEqual(bye['winner'], '4')
 
     def test_round_robin_tie_uses_saved_draw_order(self):
         tournament = self.tournament('round_robin', 3)
@@ -160,18 +181,19 @@ class TournamentStorageTests(unittest.TestCase):
         self.assertEqual(sum(s['matches'] for s in standings(snapshot[0], snapshot[1])), 4)
 
     def test_creation_validation(self):
-        for system, ids, groups in [('single', self.ids[:3], 1), ('group_double', self.ids[:5], 2),
+        for system, ids, groups in [('single', self.ids[:3], 1),
                                     ('group_double', self.ids[:2], 1), ('group_double', self.ids[:4], 3),
                                     ('single', self.ids[:1], 1), ('single', self.ids[:2] * 2, 1)]:
             with self.subTest(system=system, ids=ids, groups=groups), self.assertRaises(StoreError):
                 self.store.create_tournament('Cup', system, ids, groups)
         self.create('round_robin', 3)
+        self.create('group_double', 5, 2)
         self.store.set_active(self.ids[0], False)
         with self.assertRaises(StoreError):
             self.create()
 
     def test_completion_reopen_and_global_elo(self):
-        tournament = self.create('group_double', 6, 2)
+        tournament = self.create('group_double', 5, 2)
         while True:
             players, matches, _ = self.store.snapshot()
             state = tournament_state(tournament, matches)

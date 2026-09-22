@@ -131,7 +131,17 @@ def tournament_state(tournament, matches):
     else:
         upper, lower = players, []
 
-    upper = seed_bracket(upper)
+    if system == 'group_double' and len(players) % 2:
+        best = min((row for table in tables for row in table['rows']),
+                   key=lambda row: (-row['wins'], -(row['scored'] - row['conceded']),
+                                    -row['scored'], players.index(row['player'])))['player']
+        upper.remove(best)
+        upper = seed_bracket([best, *upper])
+        # Reserve a first-round bye even when the upper field is a power of two.
+        if None not in upper:
+            upper = [upper[0], None, upper[1], None, *upper[2:]]
+    else:
+        upper = seed_bracket(upper)
     number = 1
     while len(upper) > 1:
         winners, dropped = play_round(upper, f'u{number}', 'Upper bracket' if lower else 'Bracket', number)

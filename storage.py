@@ -275,9 +275,9 @@ class Store:
             raise StoreError('Choose a valid tournament system.')
         if len(participants) < 2 or len(set(participants)) != len(participants):
             raise StoreError('Select at least two distinct players.')
-        if system != 'round_robin' and len(participants) % 2:
-            raise StoreError('Elimination tournaments require an even number of players. '
-                             'Use Round-robin for an odd number.')
+        if system == 'single' and len(participants) % 2:
+            raise StoreError('Single-elimination tournaments require an even number of players. '
+                             'Use Round-robin or group-stage double elimination for an odd number.')
         if system == 'group_double':
             if len(participants) < 4:
                 raise StoreError('Group-stage double elimination requires at least four players.')

@@ -232,7 +232,10 @@ Player Stats includes a Clutch score computed from complete point histories.
 
 - **Single-Elimination:** an even number of players, minimum two. A loss eliminates
   a player. Non-power-of-two fields (such as six) get first-round byes.
-- **Double-Elimination with Group stage:** an even number of players, minimum four.
+- **Double-Elimination with Group stage:** any number of players, minimum four.
+  With an odd count, everyone plays the group stage. The best player across all
+  groups receives a first-round upper-bracket bye, ranked by wins, point difference,
+  points scored, then saved draw order.
   Choose the number of groups; every group must contain at least two players.
   Each group plays a single round-robin. Its top half, rounded up for odd-sized
   groups, enters the upper bracket; the rest enters the lower bracket with one
