@@ -25,7 +25,6 @@
 {% if estimates %}{{ player_estimate(match.player2, 2) }}{% endif %}
 </div>
 {% if state.winner %}<p class="winner">Winner: {{ names[state.winner] }}</p>{% endif %}
-{% if match.first_server %}<p>First server: {{ names[match.first_server] }}</p>{% else %}<p>Choose who serves first.</p>{% endif %}
 <div class="row scoring">
 {% if not match.first_server %}
 {% for player in [match.player1, match.player2] %}
