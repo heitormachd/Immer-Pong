@@ -180,11 +180,16 @@ counts at its new registration position. Final-result entry requires a winner
 but does not enforce a target or overtime rule. Removing a player retires them;
 restore them from Players when needed. Renaming updates their name in all views.
 
-Elo starts at 1000, with K=32 and the standard 400-point expected-score formula.
-Point margin does not affect Elo. All historical matches, including retired
-players' matches, are replayed in CSV row order. Only active players appear in
-the leaderboard; players without matches are unranked. Exact Elo determines
-ranking, with alphabetical ties; the displayed rating is rounded.
+Elo starts at 1000. For a match between players 1 and 2, with pre-match ratings
+`R1` and `R2`, player 1's expected score is
+`E1 = 1 / (1 + 10^((R2 − R1) / 400))`. The actual score `S1` is 1 for a win and
+0 for a loss. With `K = 32`, the rating updates are
+`ΔR1 = K × (S1 − E1)`, `R1' = R1 + ΔR1`, and `R2' = R2 − ΔR1`.
+Each player's first rating is 1000. Point margin does not affect Elo. All
+historical matches, including retired players' matches, are replayed in CSV row
+order. Only active players appear in the leaderboard; players without matches
+are unranked. Exact Elo determines ranking, with alphabetical ties; the
+displayed rating is rounded.
 Match history places **P1 ELO** beside Player 1 and **P2 ELO** beside Player 2.
 Each cell shows the pre-match rating in the normal text color, followed by its
 change in green for a gain or red for a loss, for example `1000.00 (+16.00)`.
