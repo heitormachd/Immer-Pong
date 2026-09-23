@@ -183,16 +183,20 @@ restore them from Players when needed. Renaming updates their name in all views.
 Elo starts at 1000. For a match between players 1 and 2, with pre-match ratings
 $R_1$ and $R_2$, player 1's expected score is:
 
-$$
+```math
 E_1 = \frac{1}{1 + 10^{(R_2 - R_1)/400}}
-$$
+```
 
 The actual score $S_1$ is 1 for a win and 0 for a loss. With $K = 32$, the
 rating updates are:
 
-$$
-\Delta R_1 = K(S_1 - E_1), \qquad R_1' = R_1 + \Delta R_1, \qquad R_2' = R_2 - \Delta R_1
-$$
+```math
+\begin{aligned}
+\Delta R_1 &= K(S_1 - E_1), \\
+R_1' &= R_1 + \Delta R_1, \\
+R_2' &= R_2 - \Delta R_1.
+\end{aligned}
+```
 
 Each player's first rating is 1000. Point margin does not affect Elo. All
 historical matches, including retired players' matches, are replayed in CSV row
@@ -345,54 +349,67 @@ Duel comparisons use only the selected pair's completed matches.
 
 Player advanced stats are calculated as follows:
 
-- **Net Points:**
-  $$
-  \text{Net Points} = \frac{\text{points scored} - \text{points conceded}}{\text{completed matches}}
-  $$
-  This is the average scoring margin per match, including all overtime points.
-  For example, wins of 7–4 and 7–5 plus a 3–7 loss give
-  $\frac{3 + 2 - 4}{3} = +0.33$ points per match.
-- **SRS (Simple Rating System):**
-  $$
-  \text{SRS} = \text{Net Points} + \operatorname{mean}(\text{opponents' SRS})
-  $$
-  The equations are solved together for all players, counting each opponent once
-  per completed match against them. Each connected group of opponents is centered
-  so its player ratings sum to zero. Positive ratings indicate above-average
-  performance within that group, in points per match, adjusted for opponent
-  strength. Separate groups have independent baselines and are not directly
-  comparable.
-- **Performance expectation:**
-  $$
-  \text{Performance} = 100 \times \operatorname{mean}(S_i - E_i), \qquad
-  E_i = \frac{1}{1 + 10^{(R_{\text{opp},i} - R_{\text{player},i})/400}}
-  $$
-  The actual result $S_i$ is 1 for a win and 0 for a loss. Each expected win
-  probability $E_i$ uses both players' pre-match ratings. The result is in
-  percentage points (pp): winning 60% of matches with an average expected win
-  probability of 50% gives $+10$ pp. Positive values mean more wins than Elo
-  predicted.
-- **Clutch:**
-  $$
-  \text{Clutch} = 100 \times
-  \frac{\sum_i L_i(P_i - q_{m(i)})}{\sum_i L_i}
-  $$
-  Here, $P_i$ is 1 if the player won point $i$ and 0 otherwise; $q_{m(i)}$ is the
-  player's point win rate in that match. $L_i$ measures the difference in match
-  win probability between winning and losing the next point, assuming future
-  points are 50/50 and using the resetting overtime rules. Before overtime, with
-  target $T$ and pre-point scores $a$ and $b$:
+**Net Points**
 
-  $$
-  L_i = \frac{\binom{2T - a - b - 2}{T - a - 1}}{2^{2T - a - b - 2}}
-  $$
+```math
+\text{Net Points} = \frac{\text{points scored} - \text{points conceded}}{\text{completed matches}}
+```
 
-  In overtime, $L_i = 0.5$. Sums run over points across
-  eligible matches, each with its own baseline, so matches are weighted by their
-  total point importance. Positive scores mean better performance on important
-  points relative to the player's overall play in those matches, in percentage
-  points. Only complete point histories that reproduce the final score count;
-  small samples are provisional.
+This is the average scoring margin per match, including all overtime points. For
+example, wins of 7–4 and 7–5 plus a 3–7 loss give
+$\frac{3 + 2 - 4}{3} = +0.33$ points per match.
+
+**SRS (Simple Rating System)**
+
+```math
+\text{SRS} = \text{Net Points} + \operatorname{mean}(\text{opponents' SRS})
+```
+
+The equations are solved together for all players, counting each opponent once
+per completed match against them. Each connected group of opponents is centered
+so its player ratings sum to zero. Positive ratings indicate above-average
+performance within that group, in points per match, adjusted for opponent
+strength. Separate groups have independent baselines and are not directly
+comparable.
+
+**Performance expectation**
+
+```math
+\begin{aligned}
+\text{Performance} &= 100 \times \operatorname{mean}(S_i - E_i), \\
+E_i &= \frac{1}{1 + 10^{(R_{\text{opp},i} - R_{\text{player},i})/400}}
+\end{aligned}
+```
+
+The actual result $S_i$ is 1 for a win and 0 for a loss. Each expected win
+probability $E_i$ uses both players' pre-match ratings. The result is in
+percentage points (pp): winning 60% of matches with an average expected win
+probability of 50% gives $+10$ pp. Positive values mean more wins than Elo
+predicted.
+
+**Clutch**
+
+```math
+\text{Clutch} = 100 \times
+\frac{\sum_i L_i(P_i - q_{m(i)})}{\sum_i L_i}
+```
+
+Here, $P_i$ is 1 if the player won point $i$ and 0 otherwise; $q_{m(i)}$ is the
+player's point win rate in that match. $L_i$ measures the difference in match
+win probability between winning and losing the next point, assuming future
+points are 50/50 and using the resetting overtime rules. Before overtime, with
+target $T$ and pre-point scores $a$ and $b$:
+
+```math
+L_i = \frac{\binom{2T - a - b - 2}{T - a - 1}}{2^{2T - a - b - 2}}
+```
+
+In overtime, $L_i = 0.5$. Sums run over points across eligible matches, each
+with its own baseline, so matches are weighted by their total point importance.
+Positive scores mean better performance on important points relative to the
+player's overall play in those matches, in percentage points. Only complete
+point histories that reproduce the final score count; small samples are
+provisional.
 
 Net Points, SRS, and Performance expectation use all completed results, including
 final-result-only matches. They show `—` without completed matches; Clutch shows
