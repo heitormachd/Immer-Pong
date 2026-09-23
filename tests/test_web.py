@@ -29,6 +29,112 @@ class WebTests(unittest.TestCase):
     def ledger(self):
         return {p.name: p.read_bytes() for p in Path(self.temp.name).glob('*.csv')}
 
+    def test_regular_match_best_of_three(self):
+        a, b = self.ids[:2]
+        response = self.post('/', action='create_live', player1=a, player2=b, target=2, bo3='1')
+        self.assertEqual(response.status_code, 303)
+        match = self.store.snapshot()[1][-1]
+        self.assertEqual(match['best_of'], 3)
+        self.store.set_first_server(match['id'], a, 0)
+        for revision in range(1, 3):
+            self.store.score_live_match(match['id'], a, revision)
+        match = self.store.snapshot()[1][-1]
+        self.assertEqual(match['status'], 'in_progress')
+        self.assertEqual(match['score1'], 1)
+        for revision in range(3, 5):
+            self.store.score_live_match(match['id'], a, revision)
+        match = self.store.snapshot()[1][-1]
+        self.assertEqual(match['status'], 'completed')
+        self.assertEqual((match['score1'], match['score2']), (2, 0))
+        response = self.post('/', action='create_live', player1=a, player2=b, target=2)
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(self.store.snapshot()[1][-1]['best_of'], 1)
+
+    def test_bo3_final_results_register_each_game_atomically(self):
+        a, b = self.ids[:2]
+        response = self.post('/', action='register', player1=a, player2=b, bo3='1',
+                             score1=['7', '3', '8'], score2=['4', '7', '6'])
+        self.assertEqual(response.status_code, 303)
+        matches = self.store.snapshot()[1]
+        self.assertEqual([(m['score1'], m['score2']) for m in matches],
+                         [(7, 4), (3, 7), (8, 6)])
+        before = self.ledger()
+        for first, second in ((['7'], ['4']), (['7', '3'], ['4', '7']),
+                              (['7', '7', '3'], ['4', '4', '7']),
+                              (['7', '7'], ['4', '7']), (['7', '7'], ['4'])):
+            with self.subTest(first=first, second=second):
+                response = self.post('/', action='register', player1=a, player2=b,
+                                     bo3='1', score1=first, score2=second)
+                self.assertEqual(response.status_code, 409)
+                self.assertEqual(self.ledger(), before)
+        response = self.post('/', action='register', player1=a, player2=b,
+                             bo3='1', score1=['7', '7'], score2=['4', '3'])
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(len(self.store.snapshot()[1]), 5)
+
+    def test_bo3_history_shows_games_and_undo_removes_only_unfinished_game(self):
+        from live_scoring import individual_matches
+        from ranking import database_stats, standings, elo_change
+        a, b = self.ids[:2]
+        match = self.store.create_live_match(a, b, 2, best_of=3)[1][-1]
+        self.store.set_first_server(match['id'], a, 0)
+        for revision in range(1, 3):
+            self.store.score_live_match(match['id'], a, revision)
+        players, matches, _ = self.store.snapshot()
+        self.assertEqual(len(individual_matches(matches)), 1)
+        self.assertEqual(database_stats(players, matches)['overall']['matches'], 1)
+        # Another result completes between the first and second games.
+        self.store.register(a, b, 5, 7)
+        for revision in range(3, 5):
+            self.store.score_live_match(match['id'], a, revision)
+        players, matches, _ = self.store.snapshot()
+        games = individual_matches(matches)
+        self.assertEqual([(g['score1'], g['score2']) for g in games], [(2, 0), (5, 7), (2, 0)])
+        x, y = 1000, 1000
+        for won in (True, False, True):
+            change = elo_change(x, y, won)
+            x, y = x + change, y - change
+        row = next(r for r in standings(players, matches) if r['player']['id'] == a)
+        self.assertAlmostEqual(row['elo'], x)
+        self.assertEqual(row['matches'], 3)
+        self.assertEqual(database_stats(players, matches)['overall']['points'], 16)
+        page = self.client.get('/').text
+        self.assertIn('Game 1', page)
+        self.assertIn('Game 2', page)
+        self.assertNotIn('Delete series', page)
+        self.assertEqual(page.count('<button>Rematch</button>'), 1)
+        self.assertIn('Review match · Game 2', page)
+        self.store.score_live_match(match['id'], None, 5)
+        players, matches, _ = self.store.snapshot()
+        self.assertEqual(len(individual_matches(matches)), 2)
+        self.assertEqual(database_stats(players, matches)['overall']['matches'], 2)
+        self.store.delete_match(match['id'])
+        self.assertEqual(len(self.store.snapshot()[1]), 1)
+
+    def test_history_rematch_uses_latest_players_and_standard_rules(self):
+        import re
+        self.assertNotIn('<button>Rematch</button>', self.client.get('/').text)
+        a, b, c, d = self.ids
+        self.store.register(a, b, 7, 2)
+        self.store.register(c, d, 11, 5)
+        self.store.create_live_match(a, b, 11, best_of=3)
+        page = self.client.get('/').text
+        self.assertEqual(page.count('<button>Rematch</button>'), 1)
+        self.assertNotIn('Delete…', page)
+        self.assertNotIn('Delete series…', page)
+        rows = page.split('<tbody>')[1].split('</tbody>')[0].split('</tr>')
+        self.assertIn('<button>Rematch</button>', rows[0])
+        self.assertNotIn('<button>Rematch</button>', rows[1])
+        form = re.search(r'<form method="post">(.*?)<button>Rematch</button></form>', page)[1]
+        data = dict(re.findall(r'name="([^"]+)" value="([^"]*)"', form))
+        response = self.client.post('/', data=data)
+        self.assertEqual(response.status_code, 303)
+        match = self.store.snapshot()[1][-1]
+        self.assertEqual((match['player1'], match['player2']), (c, d))
+        self.assertEqual((match['target_points'], match['best_of']), (7, 1))
+        self.assertEqual(match['status'], 'in_progress')
+        self.assertTrue(response.location.endswith('/live/' + match['id']))
+
     def test_change_checks_do_not_load_or_lock_the_ledger(self):
         before = self.ledger()
         with patch.object(self.store, '_load', side_effect=AssertionError('CSV read')):

@@ -281,18 +281,27 @@ class Store:
             self._write('players.csv', self.PLAYER_FIELDS, players)
             return players, matches, tournaments
 
-    def register(self, player1, player2, score1, score2):
-        self._validate_match(player1, player2, score1, score2)
+    def register(self, player1, player2, score1, score2, games=None):
+        scores = [(score1, score2)] if games is None else games
+        wins = [0, 0]
+        for x, y in scores:
+            self._validate_match(player1, player2, x, y)
+            if max(wins) == 2:
+                raise StoreError('A Bo3 ends when a player wins two games.')
+            wins[int(y > x)] += 1
+        if games is not None and (len(scores) not in (2, 3) or max(wins) != 2):
+            raise StoreError('Enter each game of the Bo3 until a player wins twice.')
         with self._locked():
             players, matches, tournaments = self._load()
             for player_id in (player1, player2):
                 if not self._player(players, player_id)['active']:
                     raise StoreError('A selected player has been retired. Refresh and try again.')
-            matches.append(dict(id=uuid.uuid4().hex,
-                                timestamp=datetime.now(timezone.utc).isoformat(),
-                                player1=player1, player2=player2,
-                                score1=score1, score2=score2, tournament_id='', fixture_id='',
-                                target_points=None, point_log=[], status='completed', revision=0))
+            for x, y in scores:
+                matches.append(dict(id=uuid.uuid4().hex,
+                                    timestamp=datetime.now(timezone.utc).isoformat(),
+                                    player1=player1, player2=player2,
+                                    score1=x, score2=y, tournament_id='', fixture_id='',
+                                    target_points=None, point_log=[], status='completed', revision=0))
             self._write('matches.csv', self.MATCH_FIELDS, matches)
             return players, matches, tournaments
 
@@ -449,11 +458,13 @@ class Store:
             self._write('matches.csv', self.MATCH_FIELDS, matches)
             return players, matches, tournaments
 
-    def create_live_match(self, player1, player2, target_points):
+    def create_live_match(self, player1, player2, target_points, best_of=1):
         if player1 == player2:
             raise StoreError('Choose two different players.')
         if type(target_points) is not int or target_points < 2:
             raise StoreError('Choose a target of at least 2 points.')
+        if type(best_of) is not int or best_of not in (1, 3):
+            raise StoreError('Choose best of 1 or 3.')
         with self._locked():
             players, matches, tournaments = self._load()
             if any(not self._player(players, p)['active'] for p in (player1, player2)):
@@ -461,7 +472,7 @@ class Store:
             matches.append(dict(id=uuid.uuid4().hex, timestamp=datetime.now(timezone.utc).isoformat(),
                                 player1=player1, player2=player2, score1=0, score2=0,
                                 tournament_id='', fixture_id='', target_points=target_points,
-                                point_log=[], status='in_progress', revision=0, first_server=''))
+                                point_log=[], status='in_progress', revision=0, first_server='', best_of=best_of))
             self._write('matches.csv', self.MATCH_FIELDS, matches)
             return players, matches, tournaments
 

@@ -10,7 +10,7 @@ from werkzeug.exceptions import NotFound
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
 from badges import BADGES, MAX_UPLOAD, save_badge, valid_badge
-from live_scoring import live_state
+from live_scoring import individual_matches, live_state
 from ranking import database_stats, match_elo_estimates, match_elo_history, standings
 from storage import Store, StoreError
 from tournaments import SYSTEMS, tournament_state
@@ -120,11 +120,22 @@ def create_app(data_directory=None, url_prefix=""):
         if request.method == 'POST':
             action = request.form.get('action')
             if action == 'register':
+                games = None
+                if request.form.get('bo3') == '1':
+                    try:
+                        first = [int(value) for value in request.form.getlist('score1')]
+                        second = [int(value) for value in request.form.getlist('score2')]
+                    except ValueError:
+                        raise StoreError('Scores must be whole numbers.') from None
+                    if len(first) != len(second):
+                        raise StoreError('Enter both scores for each game.')
+                    games = list(zip(first, second))
                 store.register(request.form.get('player1'), request.form.get('player2'),
-                               integer('score1'), integer('score2'))
+                               integer('score1'), integer('score2'), games=games)
             elif action == 'create_live':
                 _, rows, _ = store.create_live_match(request.form.get('player1'),
-                                                    request.form.get('player2'), integer('target'))
+                                                    request.form.get('player2'), integer('target'),
+                                                    best_of=3 if request.form.get('bo3') == '1' else 1)
                 return redirect(url_for('live', match_id=rows[-1]['id']), 303)
             elif action == 'delete':
                 store.delete_match(request.form.get('match_id'))
@@ -132,7 +143,7 @@ def create_app(data_directory=None, url_prefix=""):
                 abort(400)
             return redirect(url_for('matches'), 303)
         data = context()
-        return render('matches.html', 'matches', **data,
+        return render('matches.html', 'matches', **data, history=individual_matches(data['matches']),
                       elo=match_elo_history(data['players'], data['matches']),
                       tournament_names={t['id']: t['name'] for t in data['tournaments']})
 
@@ -170,7 +181,14 @@ def create_app(data_directory=None, url_prefix=""):
             abort(404, 'Player not found.')
         if player_id and player_id == opponent_id:
             opponent_id = ''
-        duel_matches = [m for m in data['matches']
+        game_results = individual_matches(data['matches'])
+        if game_results is not data['matches']:
+            game_elos = match_elo_history(data['players'], game_results)
+            for game in game_results:
+                if game['status'] == 'completed':
+                    game['elo1_before'] = game_elos[game['id']]['player1']['before']
+                    game['elo2_before'] = game_elos[game['id']]['player2']['before']
+        duel_matches = [m for m in game_results
                    if m['status'] == 'completed' and player_id and opponent_id
                    and {m['player1'], m['player2']} == {player_id, opponent_id}]
         return render('stats.html', 'stats', **data,

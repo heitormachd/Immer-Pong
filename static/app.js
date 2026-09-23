@@ -25,18 +25,74 @@ if (matchForm) {
   const finalScoreFields = [...matchForm.querySelectorAll('[data-final-score]')];
   const submit = matchForm.querySelector('[data-match-submit]');
 
+  const bo3Field = matchForm.querySelector('[data-live-bo3]');
+  const cards = [...matchForm.querySelectorAll('[data-player-id]')];
+  const selected = [];
+  let filter = '';
+  const normalize = text => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+  const filterCards = () => {
+    cards.forEach(card => { card.classList.toggle('search-match', Boolean(filter) && normalize(card.dataset.playerName).includes(normalize(filter))); });
+  };
+  cards.forEach(card => card.addEventListener('click', () => {
+    const index = selected.indexOf(card);
+    if (index !== -1) selected.splice(index, 1);
+    else if (selected.length < 2) selected.push(card);
+    else return;
+    cards.forEach(item => {
+      const slot = selected.indexOf(item);
+      item.dataset.slot = slot === -1 ? '' : String(slot + 1);
+      item.setAttribute('aria-pressed', String(slot !== -1));
+      item.querySelector('.player-slot').textContent = slot === -1 ? '' : 'P' + (slot + 1);
+    });
+    [1, 2].forEach(slot => {
+      matchForm.querySelector('[name="player' + slot + '"]').value = selected[slot - 1]?.dataset.playerId || '';
+    });
+    matchForm.querySelector('[data-match-selection]').textContent =
+      [1, 2].map(slot => 'P' + slot + ' ' + (selected[slot - 1]?.dataset.playerName || '—')).join(' · ');
+    submit.disabled = selected.length !== 2;
+    filter = '';
+    filterCards();
+    matchForm.dispatchEvent(new Event('change', {bubbles: true}));
+  }));
+  // Replaced on panel refresh so the handler always uses the current cards.
+  document.onkeydown = event => {
+    if (!matchForm.isConnected || !matchForm.closest('details').open
+        || event.ctrlKey || event.metaKey || event.altKey || event.isComposing
+        || event.target.closest('input, select, textarea, [contenteditable], [role="textbox"]')) return;
+    if (event.key === 'Enter' && filter) {
+      event.preventDefault();
+      const highlighted = cards.filter(card => card.classList.contains('search-match'));
+      if (highlighted.length === 1 && !selected.includes(highlighted[0])) highlighted[0].click();
+      return;
+    }
+    if (event.key === 'Escape') filter = '';
+    else if (event.key === 'Backspace') filter = filter.slice(0, -1);
+    else if (event.key.length === 1 && (event.key !== ' ' || filter)) filter += event.key;
+    else return;
+    event.preventDefault();
+    filterCards();
+    matchForm.dispatchEvent(new Event('change', {bubbles: true}));
+  };
+
   const updateMatchMode = () => {
     const isFinal = finalResult.checked;
     action.value = isFinal ? 'register' : 'create_live';
+    const bo3 = bo3Field.querySelector('input').checked;
     targetField.hidden = isFinal;
     targetInput.disabled = isFinal;
-    finalScoreFields.forEach(field => {
-      field.hidden = !isFinal;
-      field.querySelector('input').disabled = !isFinal;
+    const winners = [1, 2].map(game => {
+      const fields = finalScoreFields[game - 1].querySelectorAll('input');
+      return Math.sign(Number(fields[0].value) - Number(fields[1].value));
+    });
+    finalScoreFields.forEach((field, index) => {
+      const visible = isFinal && (index === 0 || bo3 && (index === 1 || winners[0] * winners[1] === -1));
+      field.hidden = !visible;
+      field.querySelectorAll('input').forEach(input => { input.disabled = !visible; });
     });
     submit.textContent = isFinal ? 'Register match' : 'Create match';
   };
 
+  matchForm.addEventListener('input', updateMatchMode);
   finalResult.addEventListener('change', updateMatchMode);
   updateMatchMode();
 }

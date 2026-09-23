@@ -3,7 +3,7 @@
 from statistics import median
 from math import comb
 
-from live_scoring import live_state
+from live_scoring import individual_matches, live_state
 
 
 def elo_win_probability(elo1, elo2):
@@ -27,7 +27,8 @@ def match_elo_estimates(players, matches, match):
 def rebuild_match_elos(matches):
     """Refresh persisted pre-match ratings in ledger completion order before saving."""
     ratings = {}
-    for match in matches:
+    games = individual_matches(matches)
+    for match in games:
         if match.get('status', 'completed') != 'completed':
             match['elo1_before'] = match['elo2_before'] = None
             continue
@@ -37,9 +38,19 @@ def rebuild_match_elos(matches):
         change = elo_change(x, y, match['score1'] > match['score2'])
         ratings[a], ratings[b] = x + change, y - change
 
+    if games is not matches:
+        first_games = {}
+        for game in games:
+            first_games.setdefault(game.get('series_id', game['id']), game)
+        for match in matches:
+            first = first_games.get(match['id'])
+            for field in ('elo1_before', 'elo2_before'):
+                match[field] = first[field] if first and match['status'] == 'completed' else None
+
 
 def simple_ratings(players, matches):
     """Solve SRS = mean margin + mean opponent SRS, centered per connected group."""
+    matches = individual_matches(matches)
     opponents = {p['id']: {} for p in players}
     margins = dict.fromkeys(opponents, 0)
     for match in matches:
@@ -92,6 +103,7 @@ def point_leverage(target, scores, overtime=False):
 
 def database_stats(players, matches):
     """Point opportunity rates from completed logs; Elo from all completed results."""
+    matches = individual_matches(matches)
     def counters():
         return {key: dict(wins=0, total=0) for key in ('server', 'match_point', 'against')}
 
@@ -167,6 +179,7 @@ def database_stats(players, matches):
 
 
 def _replay(players, matches):
+    matches = individual_matches(matches)
     stats = {
         p['id']: dict(player=p, elo=1000.0, matches=0, wins=0, losses=0,
                       scored=0, conceded=0, recent=[])
@@ -207,6 +220,7 @@ def match_elo_changes(players, matches):
 
 def match_elo_history(players, matches):
     """Pre-match rating and signed change for each player in completed matches."""
+    matches = individual_matches(matches)
     completed = [m for m in matches if m.get('status', 'completed') == 'completed']
     if any('elo1_before' not in m for m in completed):
         return _replay(players, matches)[1]

@@ -206,7 +206,19 @@ Values are recalculated when history changes, with two decimal places displayed.
 
 ## Live scoring
 
-Select two players and a target (at least 2, default 7), then click **Create match**.
+Click two player cards (first is P1, second is P2), choose **Target Points**
+(at least 2, default 7), then click **Create match**. Typing highlights matching
+cards without hiding others; Backspace edits the search and Escape clears it.
+
+Check **Bo3** to play until someone wins two games. Each completed game appears
+separately in history and counts separately toward Elo and statistics, including
+games from an ongoing series. Live series retain one point log: undoing a
+game-winning point removes that game's result until it is completed again.
+**Review match** opens the live match history. Only the newest completed history
+row offers **Rematch**, which starts a new 7-point Bo1 with the same two players.
+With **Enter final result** and **Bo3** checked, enter the first two games' point
+scores; a third game appears when the first two have different winners.
+The final results are saved together as individual matches.
 Use the named **+1 point** buttons as points are played. The app automatically
 declares the winner and adds the completed result to history, Elo, and the Last 5
 results. In-progress matches do not affect leaderboards. Live scoring supports

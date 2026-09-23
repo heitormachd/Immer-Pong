@@ -55,3 +55,34 @@ def live_state(match):
                 score2=games[1] if best_of == 3 else total[1], winner=winner,
                 game_score=tuple(total), games=tuple(games), best_of=best_of,
                 overtime_round=overtime_round, overtime_score=tuple(overtime_score), history=history)
+
+
+def individual_matches(matches):
+    """Expose completed Bo3 games without duplicating the stored series log."""
+    if not any(m.get('best_of', 1) == 3 and m.get('target_points') for m in matches):
+        return matches
+    results = []
+    for match in matches:
+        if match.get('best_of', 1) != 3 or not match.get('target_points'):
+            results.append(dict(match))
+            continue
+        state = live_state(match)
+        completed = sum(state['games'])
+        start = 0
+        for game in range(1, completed + 1):
+            points = [p for p in state['history'] if p['game'] == game]
+            end = start + len(points)
+            results.append(dict(match, id=f"{match['id']}:game:{game}",
+                                series_id=match['id'], game=game, best_of=1,
+                                score1=points[-1]['score1'], score2=points[-1]['score2'],
+                                timestamp=points[-1]['timestamp'], status='completed',
+                                first_server=(match['first_server'] if start == 0
+                                              else match['point_log'][start - 1]['player']),
+                                point_log=match['point_log'][start:end]))
+            start = end
+    results.sort(key=lambda m: m['timestamp'])
+    # Series-level cached ratings are not per-game ratings. Replay the games.
+    for match in results:
+        match.pop('elo1_before', None)
+        match.pop('elo2_before', None)
+    return results

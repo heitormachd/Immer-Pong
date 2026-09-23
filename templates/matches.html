@@ -1,18 +1,37 @@
 {% extends 'base.html' %}
-{% from 'macros.html' import csrf, hidden, player_select, time, elo_cell with context %}
+{% from 'macros.html' import csrf, hidden, time, elo_cell with context %}
 {% block content %}
 <h2>Matches</h2>
 <details class="box" {% if not matches %}open{% endif %}><summary>Create match</summary>
-<form method="post" class="row match-form" data-match-form>
+<form method="post" class="match-form" data-match-form>
   {{ csrf() }}{{ hidden('action', 'create_live') }}
-  {{ player_select('player1', 'Player 1', active) }}
-  <label class="match-final-score" data-final-score hidden>Points<input type="number" name="score1" min="0" max="2147483647" value="0" required disabled></label>
-  {{ player_select('player2', 'Player 2', active) }}
-  <label class="match-final-score" data-final-score hidden>Points<input type="number" name="score2" min="0" max="2147483647" value="0" required disabled></label>
-  <label data-live-target>Target<input type="number" name="target" min="2" value="7" required></label>
-  <div class="match-controls">
-  <button type="submit" data-match-submit {% if active|length < 2 %}disabled{% endif %}>Create match</button>
-  <label class="mode-toggle"><input type="checkbox" id="final-result-toggle" name="final_result" value="1"> Enter final result</label>
+  {{ hidden('player1', '') }}{{ hidden('player2', '') }}
+  <div class="player-cards" role="group" aria-label="Choose players">
+  {% for player in active %}
+    <button type="button" class="player-card" data-player-id="{{ player.id }}" data-player-name="{{ player.name }}" aria-pressed="false">
+      <span class="player-slot" aria-hidden="true"></span>
+      <svg class="player-avatar" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="24" cy="16" r="8"/><path d="M9 41v-5a15 15 0 0 1 30 0v5"/></svg>
+      <strong>{{ player.name }}</strong>
+    </button>
+  {% endfor %}
+  </div>
+  <p class="match-selection" data-match-selection aria-live="polite">P1 — · P2 —</p>
+  <div class="match-options">
+    <div class="match-settings">
+      <label data-live-target>Target Points<input type="number" name="target" min="2" value="7" required></label>
+      <div class="match-mode-options">
+        <label class="mode-toggle" data-live-bo3><input type="checkbox" name="bo3" value="1"> Bo3</label>
+        <label class="mode-toggle"><input type="checkbox" id="final-result-toggle" name="final_result" value="1"> Enter final result</label>
+      </div>
+    </div>
+    {% for game in range(1, 4) %}
+    <fieldset class="match-game-score" data-final-score hidden>
+      <legend>Game {{ game }}</legend>
+      <label>P1 Points<input type="number" name="score1" min="0" max="2147483647" value="0" required disabled></label>
+      <label>P2 Points<input type="number" name="score2" min="0" max="2147483647" value="0" required disabled></label>
+    </fieldset>
+    {% endfor %}
+    <button type="submit" data-match-submit disabled>Create match</button>
   </div>
 </form>
 {% if active|length < 2 %}<p>Add at least two active players in Players to start a match.</p>{% endif %}
@@ -22,10 +41,10 @@
 <h2>Match history</h2>
 <div class="table-scroll"><table>
 <thead><tr><th>Time</th><th>Player 1</th><th>P1 Elo</th><th>Points</th><th>Player 2</th><th>P2 Elo</th><th>Tournament</th><th>Actions</th></tr></thead>
-<tbody>{% for m in matches|reverse if m.status == 'completed' %}
+<tbody>{% for m in history|reverse if m.status == 'completed' %}
 <tr><td>{{ time(m.timestamp) }}</td><td>{{ names[m.player1] }}</td><td class="number">{{ elo_cell(elo[m.id].player1) }}</td><td class="number">{{ m.score1 }} – {{ m.score2 }}</td><td>{{ names[m.player2] }}</td><td class="number">{{ elo_cell(elo[m.id].player2) }}</td><td>{{ tournament_names.get(m.tournament_id, '—') }}</td>
-<td class="actions">{% if m.target_points %}<a href="{{ url_for('live', match_id=m.id) }}">Point history / review</a>{% endif %}
-<form method="post" data-confirm="Delete this match? Its result and any point history will be removed, and Elo recalculated.">{{ csrf() }}{{ hidden('action', 'delete') }}{{ hidden('match_id', m.id) }}<button>Delete…</button></form></td></tr>
+<td><div class="actions">{% if m.target_points %}<a href="{{ url_for('live', match_id=m.get('series_id', m.id)) }}">Review match{{ ' · Game ' ~ m.game if m.series_id else '' }}</a>{% endif %}
+{% if loop.first %}<form method="post">{{ csrf() }}{{ hidden('action', 'create_live') }}{{ hidden('player1', m.player1) }}{{ hidden('player2', m.player2) }}{{ hidden('target', '7') }}<button>Rematch</button></form>{% endif %}</div></td></tr>
 {% else %}<tr><td colspan="8" class="empty">No completed matches yet.</td></tr>{% endfor %}</tbody>
 </table></div>
 {% endblock %}
