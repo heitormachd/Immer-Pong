@@ -6,23 +6,26 @@
 <h2>{{ names[match.player1] }} vs {{ names[match.player2] }}</h2>
 <p>{{ 'Completed' if state.winner else 'In progress' }}</p>
 {% macro player_estimate(player, side) %}
-{% set estimate = estimates[player] %}
+{% set estimate = estimates[player] if estimates else none %}
 <div class="match-estimate player-{{ side }}">
-<strong>{{ names[player] }}</strong>
-<span class="muted number">Elo {{ '%.2f'|format(estimate.elo) }}</span>
+<div class="player-identity"><strong>{{ names[player] }}</strong>
+{% if estimate %}<span class="muted number">Elo {{ '%.2f'|format(estimate.elo) }}</span>{% endif %}
+<img class="live-avatar" src="{{ avatar_url(avatars[player]) }}" alt=""></div>
+{% if estimate %}<div class="player-projection">
 <strong class="win-probability">{{ '%.1f'|format(estimate.probability * 100) }}%</strong>
 <span class="muted">Win probability</span>
 <span class="gain number">{{ '%+.2f'|format(estimate.win) }} Elo if win</span>
+</div>{% endif %}
 </div>
 {% endmacro %}
-<div{% if estimates %} class="match-score-layout"{% endif %}>
-{% if estimates %}{{ player_estimate(match.player1, 1) }}{% endif %}
+<div class="match-score-layout">
+{{ player_estimate(match.player1, 1) }}
 <div class="scoreboard">
 {% if state.best_of == 3 %}<span>Best of 3 · Games {{ state.games[0] }} – {{ state.games[1] }}</span>{% endif %}
 <span>First to {{ 2 if state.overtime_round else match.target_points }} points wins</span>
 <strong>{% if state.overtime_round %}{{ state.overtime_score[0] }}<sub aria-label="Player 1 accumulated points">{{ state.game_score[0] }}</sub> – {{ state.overtime_score[1] }}<sub aria-label="Player 2 accumulated points">{{ state.game_score[1] }}</sub>{% else %}{{ state.game_score[0] }} – {{ state.game_score[1] }}{% endif %}</strong>
 </div>
-{% if estimates %}{{ player_estimate(match.player2, 2) }}{% endif %}
+{{ player_estimate(match.player2, 2) }}
 </div>
 {% if state.winner %}<p class="winner">Winner: {{ names[state.winner] }}</p>{% endif %}
 <div class="row scoring">

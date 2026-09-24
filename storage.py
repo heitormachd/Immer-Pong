@@ -23,7 +23,7 @@ class StoreError(Exception):
 
 
 class Store:
-    PLAYER_FIELDS = ('id', 'name', 'active')
+    PLAYER_FIELDS = ('id', 'name', 'active', 'avatar')
     LEGACY_MATCH_FIELDS = ('id', 'timestamp', 'player1', 'player2', 'score1', 'score2')
     TOURNAMENT_MATCH_FIELDS = (*LEGACY_MATCH_FIELDS, 'tournament_id', 'fixture_id')
     LIVE_MATCH_FIELDS = (*TOURNAMENT_MATCH_FIELDS, 'target_points', 'point_log', 'status', 'revision')
@@ -65,12 +65,16 @@ class Store:
                                       and reader.fieldnames in (list(self.LEGACY_TOURNAMENT_FIELDS),
                                                                 list(self.PREVIOUS_TOURNAMENT_FIELDS),
                                                                 list(self.SCORING_TOURNAMENT_FIELDS)))
-                if reader.fieldnames != list(fields) and not legacy and not legacy_tournaments:
+                legacy_players = name == 'players.csv' and reader.fieldnames == ['id', 'name', 'active']
+                if reader.fieldnames != list(fields) and not legacy and not legacy_tournaments and not legacy_players:
                     raise ValueError(f'Unexpected columns in {name}')
                 rows = list(reader)
                 if any(set(row) != set(reader.fieldnames) or any(v is None for v in row.values())
                        for row in rows):
                     raise ValueError(f'Incomplete row in {name}')
+                if legacy_players:
+                    for row in rows:
+                        row['avatar'] = ''
                 if legacy:
                     for row in rows:
                         row.setdefault('tournament_id', '')
@@ -251,7 +255,7 @@ class Store:
             self._write('matches.csv', self.MATCH_FIELDS, matches)
             return backup
 
-    def save_player(self, name, player_id=None):
+    def save_player(self, name, player_id=None, avatar=None):
         name = name.strip()
         if not name:
             raise StoreError('Enter a player name.')
@@ -261,9 +265,12 @@ class Store:
                    for p in players):
                 raise StoreError('That name already exists (including retired players).')
             if player_id is None:
-                players.append(dict(id=uuid.uuid4().hex, name=name, active=True))
+                players.append(dict(id=uuid.uuid4().hex, name=name, active=True, avatar=avatar or ''))
             else:
-                self._player(players, player_id)['name'] = name
+                player = self._player(players, player_id)
+                player['name'] = name
+                if avatar is not None:
+                    player['avatar'] = avatar
             self._write('players.csv', self.PLAYER_FIELDS, players)
             return players, matches, tournaments
 

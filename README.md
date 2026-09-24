@@ -121,15 +121,67 @@ continues to use `./build.sh` and ports 8080/8081.
 After saving source changes in the shared project folder, run on the NAS via SSH:
 
 ```sh
-cd /share/storage_das1/heitor/ping-pong
-sudo docker compose -p immer-ping -f compose.nas.yaml up -d --build
+cd /share/storage_das1/heitor/ping-pong &&
+sudo env DOCKER_BUILDKIT=0 docker build \
+  -t immer-ping-ping-pong \
+  -t immer-ping-ping-pong-test \
+  . &&
+sudo docker compose -p immer-ping -f compose.nas.yaml up -d --no-build
 ```
 
 Always use `-p immer-ping` to target the existing Container Station application.
 A different project name creates a separate application and can fail because
-ports 18080/18081 are already allocated. The command rebuilds the images and
-replaces containers as needed; `data/` and `test_data/` remain in place. Restarting
+ports 18080/18081 are already allocated. These commands build one image with both
+service tags and
+replace containers as needed; `data/` and `test_data/` remain in place. Restarting
 alone does not load source changes copied into the images.
+
+The installed NAS Docker version has successfully built and started both services
+using this legacy-builder workaround. `DOCKER_BUILDKIT=0` applies only to that
+build command; it does not change future Compose builds. Running `up --build`
+again re-enters the failing BuildKit path. Keep `--no-build` for the deployment
+step. The `&&` operators prevent deployment if the directory change or build fails.
+The [legacy builder is deprecated](https://docs.docker.com/reference/cli/docker/image/build/),
+so this is a workaround for the current NAS installation, not a repair of BuildKit.
+
+### NAS build fails with `error creating zfs mount`
+
+If the build fails at `load build definition from Dockerfile` and the error
+names `.qpkg/container-station/docker/zfs/graph/...`, Docker cannot mount its
+internal ZFS build storage. This does not establish that the project's Dockerfile
+is missing. The accompanying `git was not found` warning concerns commit metadata
+and is not the fatal error. See [Docker's ZFS storage documentation](https://docs.docker.com/engine/storage/drivers/zfs-driver/).
+
+Collect these diagnostics on the NAS before changing Docker's state:
+
+```sh
+cd /share/storage_das1/heitor/ping-pong
+ls -l Dockerfile
+sudo docker version
+sudo docker compose version
+sudo docker info
+sudo docker buildx ls
+sudo docker compose -p immer-ping -f compose.nas.yaml ps
+```
+
+The captured NAS output shows the legacy build and container startup succeeding
+while BuildKit fails mounting a ZFS build layer. Use the update procedure above;
+a Container Station restart is not needed to try this proven workaround.
+The exact cause of the BuildKit mount failure remains unconfirmed.
+
+If `docker info` reports `invalid property 'fragmentation'` and `Zpool Health:
+not available`, its pool-information query failed because QNAP's `zpool` command
+does not support that property. This output does not establish unhealthy storage.
+Check health and free space in the NAS storage UI, or query supported properties:
+
+```sh
+sudo /sbin/zpool get health,free,size zpool1
+```
+
+For a permanent BuildKit fix, retain the full error, diagnostic output, and NAS
+firmware / Container Station versions for QNAP support. Do not manually delete
+`docker/zfs`, destroy ZFS datasets, or run `docker system prune --volumes` as a
+repair: those actions can affect other NAS applications.
 
 ### Optional NAS reverse proxy
 
@@ -307,7 +359,7 @@ adds them at the end of global history, so Elo is recalculated in that new order
 
 ## Shared data and recovery
 
-`data/players.csv`, `data/matches.csv`, and `data/tournaments.csv` are UTF-8 tables created as needed. Players have stable IDs, names, and `active` (1/0). Matches
+`data/players.csv`, `data/matches.csv`, and `data/tournaments.csv` are UTF-8 tables created as needed. Players have stable IDs, names, `active` (1/0), and an optional `avatar` filename. Older player tables are upgraded on the next player save. Matches
 have IDs, UTC timestamps, player IDs, integer scores, and optional tournament and
 fixture IDs. The `first_server` column stores the starting server’s player ID;
 existing matches default to Player 1. New live matches show a “{player name} to serve”
@@ -465,3 +517,9 @@ finishes again. Minor matches still contribute to normal match statistics.
 Tournament CSV rows include `classification` (`minor` or `major`) and `badge`
 (empty for Minors; `cup`, `shield`, `star`, or an uploaded PNG filename for Majors). There is no migration
 for older tournament rows during development.
+
+Player pictures can be uploaded through **Edit** on each card in **Players**.
+PNG, JPEG, and WebP images up to 5 MB are cropped and resized to 512 × 512
+pixels and saved under the selected data directory’s `avatars/` folder. Include
+this folder in backups. Players without a picture use the default avatar.
+Pictures appear in Create match and live scoring.

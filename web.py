@@ -55,7 +55,7 @@ def create_app(data_directory=None, url_prefix=""):
             if not token or not secrets.compare_digest(token.encode(), request.form.get('csrf', '').encode()):
                 abort(400, 'This form expired. Refresh the page and try again.')
         session.setdefault('csrf', secrets.token_hex(32))
-        if request.method == 'GET' and request.endpoint not in ('static', 'uploaded_badge', 'changes'):
+        if request.method == 'GET' and request.endpoint not in ('static', 'uploaded_badge', 'uploaded_avatar', 'changes'):
             # Capture before reading data so a concurrent change is never missed.
             g.data_version = data_version()
 
@@ -83,10 +83,22 @@ def create_app(data_directory=None, url_prefix=""):
             abort(404)
         return send_from_directory(directory / 'badges', filename, mimetype='image/png')
 
+    @app.template_global()
+    def avatar_url(avatar):
+        return (url_for('uploaded_avatar', filename=avatar) if avatar
+                else url_for('static', filename='avatar.svg'))
+
+    @app.get('/avatars/<filename>')
+    def uploaded_avatar(filename):
+        if not valid_badge(filename) or filename in BADGES:
+            abort(404)
+        return send_from_directory(directory / 'avatars', filename, mimetype='image/png')
+
     def context():
         players, matches, tournaments = store.snapshot()
         return dict(players=sorted(players, key=lambda p: p['name'].casefold()),
                     matches=matches, tournaments=tournaments,
+                    avatars={p['id']: p['avatar'] for p in players},
                     names={p['id']: p['name'] for p in players}, systems=SYSTEMS, badges=BADGES,
                     active=sorted((p for p in players if p['active']), key=lambda p: p['name'].casefold()))
 
@@ -155,7 +167,16 @@ def create_app(data_directory=None, url_prefix=""):
                 player_id = request.form.get('player_id') if action == 'rename' else None
                 if action == 'rename' and not player_id:
                     abort(400)
-                store.save_player(request.form.get('name', ''), player_id)
+                uploaded = request.files.get('avatar')
+                saved = None
+                try:
+                    if uploaded and uploaded.filename:
+                        saved = save_badge(uploaded, directory, avatar=True)
+                    store.save_player(request.form.get('name', ''), player_id, avatar=saved)
+                except (ValueError, StoreError) as exc:
+                    if saved:
+                        (directory / 'avatars' / saved).unlink(missing_ok=True)
+                    raise StoreError(str(exc)) from exc
             elif action in ('retire', 'restore'):
                 store.set_active(request.form.get('player_id'), action == 'restore')
             else:

@@ -29,6 +29,43 @@ class WebTests(unittest.TestCase):
     def ledger(self):
         return {p.name: p.read_bytes() for p in Path(self.temp.name).glob('*.csv')}
 
+    def test_player_avatar_upload_and_match_display(self):
+        from io import BytesIO
+        from PIL import Image
+
+        picture = BytesIO()
+        Image.new('RGB', (800, 600), 'blue').save(picture, format='PNG')
+        picture.seek(0)
+        response = self.post('/players', action='rename', player_id=self.ids[0],
+                             name='Alice', avatar=(picture, 'portrait.png'))
+        self.assertEqual(response.status_code, 303)
+        avatar = self.store.snapshot()[0][0]['avatar']
+        with Image.open(Path(self.temp.name) / 'avatars' / avatar) as image:
+            self.assertEqual(image.size, (512, 512))
+        with self.client.get('/avatars/' + avatar) as response:
+            self.assertEqual(response.status_code, 200)
+        self.assertIn(('/avatars/' + avatar).encode(), self.client.get('/').data)
+        match = self.store.create_live_match(*self.ids[:2], 7)[1][-1]
+        self.assertIn(('/avatars/' + avatar).encode(),
+                      self.client.get('/live/' + match['id']).data)
+        self.post('/players', action='rename', player_id=self.ids[0], name='Alicia')
+        self.assertEqual(self.store.snapshot()[0][0]['avatar'], avatar)
+
+    def test_invalid_avatar_does_not_change_player(self):
+        from io import BytesIO
+        before = self.ledger()
+        response = self.post('/players', action='rename', player_id=self.ids[0],
+                             name='Alicia', avatar=(BytesIO(b'not an image'), 'fake.png'))
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(self.ledger(), before)
+
+    def test_legacy_players_can_save_avatar(self):
+        path = Path(self.temp.name) / 'players.csv'
+        path.write_text('id,name,active\nlegacy,Legacy,1\n')
+        self.assertEqual(self.store.snapshot()[0][0]['avatar'], '')
+        self.store.save_player('Legacy renamed', 'legacy')
+        self.assertEqual(self.store.snapshot()[0][0]['avatar'], '')
+
     def test_regular_match_best_of_three(self):
         a, b = self.ids[:2]
         response = self.post('/', action='create_live', player1=a, player2=b, target=2, bo3='1')

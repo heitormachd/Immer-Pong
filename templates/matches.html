@@ -10,7 +10,7 @@
   {% for player in active %}
     <button type="button" class="player-card" data-player-id="{{ player.id }}" data-player-name="{{ player.name }}" aria-pressed="false">
       <span class="player-slot" aria-hidden="true"></span>
-      <svg class="player-avatar" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="24" cy="16" r="8"/><path d="M9 41v-5a15 15 0 0 1 30 0v5"/></svg>
+      <img class="player-avatar" src="{{ avatar_url(player.avatar) }}" alt="">
       <strong>{{ player.name }}</strong>
     </button>
   {% endfor %}
