@@ -362,7 +362,7 @@ $`\frac{3 + 2 - 4}{3} = +0.33`$ points per match.
 **SRS (Simple Rating System)**
 
 ```math
-\text{SRS} = \text{Net Points} + \operatorname{mean}(\text{opponents' SRS})
+\text{SRS} = \text{Net Points} + \text{mean}(\text{opponents' SRS})
 ```
 
 The equations are solved together for all players, counting each opponent once
@@ -376,7 +376,7 @@ comparable.
 
 ```math
 \begin{aligned}
-\text{Performance} &= 100 \times \operatorname{mean}(S_i - E_i), \\
+\text{Performance} &= 100 \times \text{mean}(S_i - E_i), \\
 E_i &= \frac{1}{1 + 10^{(R_{\text{opp},i} - R_{\text{player},i})/400}}
 \end{aligned}
 ```
