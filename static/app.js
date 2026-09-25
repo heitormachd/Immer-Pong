@@ -31,7 +31,15 @@ if (matchForm) {
   let filter = '';
   const normalize = text => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
   const filterCards = () => {
-    cards.forEach(card => { card.classList.toggle('search-match', Boolean(filter) && normalize(card.dataset.playerName).includes(normalize(filter))); });
+    let query = normalize(filter);
+    if (query && !cards.some(card => normalize(card.dataset.playerName).startsWith(query))) {
+      filter = '';
+      query = '';
+    }
+    cards.forEach(card => {
+      const matches = Boolean(query) && normalize(card.dataset.playerName).startsWith(query);
+      card.classList.toggle('search-match', matches);
+    });
   };
   cards.forEach(card => card.addEventListener('click', () => {
     const index = selected.indexOf(card);

@@ -263,8 +263,10 @@ Values are recalculated when history changes, with two decimal places displayed.
 ## Live scoring
 
 Click two player cards (first is P1, second is P2), choose **Target Points**
-(at least 2, default 7), then click **Create match**. Typing highlights matching
-cards without hiding others; Backspace edits the search and Escape clears it.
+(at least 2, default 7), then click **Create match**. Typing matches the start of
+player names (ignoring case and accents), highlighting matching cards without
+hiding others. A search with no matches clears itself;
+Backspace edits the search and Escape clears it. Enter selects a unique match.
 
 Check **Bo3** to play until someone wins two games. Each completed game appears
 separately in history and counts separately toward Elo and statistics, including
