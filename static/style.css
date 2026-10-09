@@ -127,7 +127,9 @@ details > .table-scroll { margin-top: 16px; margin-bottom: 0; }
 .badge-option, .achievement { display: flex; align-items: center; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid #666; }
 .badge-option:has(input:checked) { border-color: #e8b94f; background: #333027; }
 .badge-option input { width: auto; }
+.achievements { display: grid; grid-template-columns: repeat(auto-fill, minmax(0, 200px)); grid-auto-rows: 1fr; align-items: stretch; }
 .achievement { max-width: 200px; text-align: center; overflow-wrap: anywhere; text-decoration: none; }
+.achievement > span[role="img"] { display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; flex-shrink: 0; font-size: 64px; line-height: 1; }
 .achievement:hover { border-color: #e8b94f; }
 .classification { color: #aaa; font-size: 12px; }
 

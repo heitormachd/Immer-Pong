@@ -20,6 +20,12 @@
 {{ rate('Match-point holder winrate', stats.overall.match_point) }}
 <div class="stat-card"><dt>Median Elo</dt><dd><strong>{{ '%.2f'|format(stats.median_elo) if stats.median_elo is not none else '—' }}</strong></dd></div>
 </dl>
+{% if alpha %}
+<h3 id="alpha-season">Alpha season — Final standings</h3>
+<div class="table-scroll"><table><thead><tr><th>Rank</th><th>Player</th><th>Final Elo</th></tr></thead><tbody>
+{% for row in alpha.standings %}<tr><td>{{ row.rank or '—' }}{% if row.rank in [1, 2, 3] %} {{ ['🥇', '🥈', '🥉'][row.rank - 1] }}{% endif %}</td><td>{{ row.name }}</td><td>{{ '%.2f'|format(row.elo) }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endif %}
 {% else %}
 <h3>Player Stats</h3>
 <form method="get" action="{{ url_for('stats') }}" class="row" data-stats-form>
@@ -27,13 +33,18 @@
 <label>Player<select name="player"><option value="">Choose a player</option>{% for p in players %}<option value="{{ p.id }}" {% if p.id == player_id %}selected{% endif %}>{{ p.name }}{{ ' (retired)' if not p.active else '' }}</option>{% endfor %}</select></label>
 </form>
 {% if player_id %}
-{% if achievements %}
+{% set alpha_medals = alpha.standings|selectattr('player_id', 'equalto', player_id)|selectattr('rank', 'in', [1, 2, 3])|list if alpha else [] %}
+{% set alpha_champion = alpha and alpha.state.champion == player_id %}
+{% if achievements or alpha_medals or alpha_champion %}
 <h3 id="achievements-title">Achievements</h3>
 <section class="box" aria-labelledby="achievements-title">
 <div class="achievements">{% for t in achievements %}
 <a class="achievement" href="{{ url_for('tournament', tournament_id=t.id) }}" aria-label="{{ t.name }} — Major champion. View tournament history">
 <img class="tournament-badge" src="{{ badge_url(t.badge) }}" alt=""><strong>{{ t.name }}</strong><span class="muted">Major champion</span></a>
-{% endfor %}</div>
+{% endfor %}
+{% if alpha_champion %}<a class="achievement" href="{{ url_for('tournament', tournament_id=alpha.tournament.id) }}" aria-label="{{ alpha.tournament.name }} — Major champion. View tournament history"><img class="tournament-badge" src="{{ badge_url(alpha.tournament.badge) }}" alt=""><strong>{{ alpha.tournament.name }}</strong><span class="muted">Major champion · Alpha season</span></a>{% endif %}
+{% for row in alpha_medals %}<a class="achievement" href="{{ url_for('stats') }}#alpha-season"><span role="img" aria-label="{{ ['Gold', 'Silver', 'Bronze'][row.rank - 1] }} medal">{{ ['🥇', '🥈', '🥉'][row.rank - 1] }}</span><strong>Alpha season</strong><span class="muted">{{ ['Gold', 'Silver', 'Bronze'][row.rank - 1] }} · {{ ['1st', '2nd', '3rd'][row.rank - 1] }} place</span></a>{% endfor %}
+</div>
 </section>
 {% endif %}
 

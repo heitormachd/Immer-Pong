@@ -147,10 +147,10 @@ class ScheduleTests(unittest.TestCase):
         self.assertEqual(tournament_state(tournament, matches)['champion'], '0')
 
     def test_winners_only_format_completes_with_correct_loss_routing(self):
-        for count in range(4, 18):
+        for count, version in ((n, v) for n in range(4, 18) for v in (2, 3)):
             for groups in range(1, count // 2 + 1):
-                with self.subTest(count=count, groups=groups):
-                    tournament = dict(self.tournament('group_double', count, groups), format_version=2)
+                with self.subTest(count=count, groups=groups, version=version):
+                    tournament = dict(self.tournament('group_double', count, groups), format_version=version)
                     state, matches = play(tournament, count * groups)
                     losses = {row['player']: int(rank > 0) for table in state['tables']
                               for rank, row in enumerate(table['rows'])}
@@ -166,6 +166,34 @@ class ScheduleTests(unittest.TestCase):
                         losses[b if match['score1'] > match['score2'] else a] += 1
                     self.assertTrue(state['complete'])
                     self.assertEqual(sum(f['stage'] == 'Grand final' for f in state['fixtures']), 1)
+
+    def test_upper_final_loser_waits_until_lower_round_four(self):
+        tournament = dict(self.tournament('group_double', 8, 2), format_version=3)
+        matches = [record(tournament, f) for f in tournament_state(tournament, [])['fixtures']]
+        first_round = ready(tournament_state(tournament, matches))
+        upper_final = next(f for f in first_round if f['stage'] == 'Upper bracket')
+        matches.extend(record(tournament, f) for f in first_round)
+        state = tournament_state(tournament, matches)
+        survivors = [f['winner'] for f in state['fixtures']
+                     if f['stage'] == 'Lower bracket' and f['round'] == 1]
+        second_round = ready(state)
+        self.assertEqual([(f['round'], f['player1'], f['player2']) for f in second_round],
+                         [(2, survivors[0], survivors[1]), (2, survivors[2], survivors[3])])
+        self.assertFalse(any(f['bye'] for f in state['fixtures'] if f['round'] == 2))
+        matches.extend(record(tournament, f) for f in second_round)
+        third_round, = ready(tournament_state(tournament, matches))
+        self.assertEqual((third_round['round'], third_round['player1'], third_round['player2']),
+                         (3, survivors[0], survivors[2]))
+        matches.append(record(tournament, third_round))
+        fourth_round, = ready(tournament_state(tournament, matches))
+        self.assertEqual((fourth_round['round'], fourth_round['player1'], fourth_round['player2']),
+                         (4, survivors[0], upper_final['player2']))
+        matches.append(record(tournament, fourth_round, first_wins=False))
+        final, = ready(tournament_state(tournament, matches))
+        self.assertEqual((final['stage'], final['player1'], final['player2']),
+                         ('Grand final', upper_final['player1'], upper_final['player2']))
+        matches.append(record(tournament, final))
+        self.assertTrue(tournament_state(tournament, matches)['complete'])
 
     def test_three_group_winners_and_six_lower_entrants_seeded_by_performance(self):
         tournament = dict(self.tournament('group_double', 9, 3), format_version=2)
@@ -287,7 +315,7 @@ class TournamentStorageTests(unittest.TestCase):
         old = self.store.snapshot()[2][0]
         self.assertEqual(old['format_version'], 1)
         self.assertEqual((Path(self.temp.name) / 'tournaments.csv').read_bytes(), before)
-        self.assertEqual(self.create('group_double', 5, 2)['format_version'], 2)
+        self.assertEqual(self.create('group_double', 5, 2)['format_version'], 3)
         _, matches, events = Store(self.temp.name).snapshot()
         rebuilt = tournament_state(events[0], matches)
         self.assertEqual(rebuilt['champion'], state['champion'])

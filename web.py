@@ -39,7 +39,7 @@ def create_app(data_directory=None, url_prefix=""):
 
     def data_version():
         stamps = []
-        for name in ('players.csv', 'matches.csv', 'tournaments.csv'):
+        for name in ('players.csv', 'matches.csv', 'tournaments.csv', 'alpha-season.json'):
             try:
                 stat = (directory / name).stat()
                 stamps.append((stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns))
@@ -97,7 +97,7 @@ def create_app(data_directory=None, url_prefix=""):
     def context():
         players, matches, tournaments = store.snapshot()
         return dict(players=sorted(players, key=lambda p: p['name'].casefold()),
-                    matches=matches, tournaments=tournaments,
+                    matches=matches, tournaments=tournaments, alpha=store.alpha_season(),
                     avatars={p['id']: p['avatar'] for p in players},
                     names={p['id']: p['name'] for p in players}, systems=SYSTEMS, badges=BADGES,
                     active=sorted((p for p in players if p['active']), key=lambda p: p['name'].casefold()))
@@ -290,6 +290,16 @@ def create_app(data_directory=None, url_prefix=""):
 
     @app.route('/tournaments/<tournament_id>', methods=['GET', 'POST'])
     def tournament(tournament_id):
+        alpha = store.alpha_season()
+        if alpha and alpha['tournament']['id'] == tournament_id:
+            if request.method == 'POST':
+                abort(400, 'Archived tournaments are read-only.')
+            data = context()
+            data['names'] = alpha['names']
+            return render('tournament.html', 'tournaments', **data,
+                          event=alpha['tournament'], state=alpha['state'], archived=True,
+                          latest=None, live_fixture=None, next_fixture=None,
+                          skipped_fixtures=[], skipped_ids=[])
         if request.method == 'POST':
             action = request.form.get('action')
             if action == 'start_live':

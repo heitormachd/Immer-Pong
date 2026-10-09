@@ -173,6 +173,16 @@ def tournament_state(tournament, matches):
             survivors, _ = play_round(lower, f'l{number}a', 'Lower bracket', 2 * number - 1)
             if winners is None or survivors is None:
                 return finish('Playoffs')
+            lower_round = 2 * number
+            if tournament.get('format_version', 1) >= 3 and len(winners) == 1:
+                # The upper-final loser waits for the lower field to produce
+                # one challenger, avoiding an extra bye after the first round.
+                while len(survivors) > 1:
+                    survivors, _ = play_round(survivors, f'l{number}c{lower_round}',
+                                              'Lower bracket', lower_round)
+                    if survivors is None:
+                        return finish('Playoffs')
+                    lower_round += 1
             # Interleave lower survivors and upper losers; reverse the drop order
             # to avoid simply matching the same adjacent seeds again.
             dropped.reverse()
@@ -181,7 +191,7 @@ def tournament_state(tournament, matches):
                 for side in (survivors, dropped):
                     if i < len(side):
                         pool.append(side[i])
-            lower, _ = play_round(pool, f'l{number}b', 'Lower bracket', 2 * number)
+            lower, _ = play_round(pool, f'l{number}b', 'Lower bracket', lower_round)
             if lower is None:
                 return finish('Playoffs')
         elif winners is None:

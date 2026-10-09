@@ -124,7 +124,7 @@ class Store:
                 self._validate_scoring(tournament['target_points'], tournament['target_stage'],
                                        tournament['alternate_target'], tournament['bo3_stage'])
                 tournament['format_version'] = int(tournament['format_version'])
-                if tournament['format_version'] not in (1, 2):
+                if tournament['format_version'] not in (1, 2, 3):
                     raise ValueError('Unknown tournament format version')
                 participants = tournament['players']
                 self._validate_identity(tournament['classification'], tournament['badge'])
@@ -239,6 +239,13 @@ class Store:
     def snapshot(self):
         with self._locked():
             return self._load()
+
+    def alpha_season(self):
+        """Historical results are separate from the current match ledger."""
+        try:
+            return json.loads((self.directory / 'alpha-season.json').read_text(encoding='utf-8'))
+        except FileNotFoundError:
+            return None
 
     def migrate_elo(self):
         """Back up and upgrade an older match table once, under the normal lock."""
@@ -381,7 +388,7 @@ class Store:
             tournaments.append(dict(id=uuid.uuid4().hex, name=name, system=system,
                                     created_at=datetime.now(timezone.utc).isoformat(),
                                     players=seeds, groups=groups, classification=classification, badge=badge,
-                                    format_version=2, target_points=target_points, target_stage=target_stage,
+                                    format_version=3, target_points=target_points, target_stage=target_stage,
                                     alternate_target=alternate_target, bo3_stage=bo3_stage,
                                     skipped_fixtures=[]))
             self._write('tournaments.csv', self.TOURNAMENT_FIELDS, tournaments)

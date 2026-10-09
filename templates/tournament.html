@@ -3,6 +3,7 @@
 {% block content %}
 <a href="{{ url_for('tournaments') }}">← Tournaments</a>
 <h2 class="tournament-heading">{% if event.classification == 'major' %}<img class="tournament-badge" src="{{ badge_url(event.badge) }}" alt="Tournament badge">{% endif %}{{ event.name }}</h2>
+{% if archived %}<p>Alpha season · Archived tournament history · Read-only</p>{% endif %}
 <p>{{ event.classification|title }} · {{ systems[event.system] }} · {{ event.players|length }} players · {{ state.phase }}{% if state.champion %} · <b>Winner: {{ names[state.champion] }}</b>{% endif %}</p>
 {% if live_fixture or next_fixture %}
 <section class="next-match" id="next-match">

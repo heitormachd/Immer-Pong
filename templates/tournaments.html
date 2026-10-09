@@ -30,8 +30,9 @@
 <button {% if active|length < 2 %}disabled{% endif %}>Create tournament</button>
 </form></details>
 <details class="box"><summary>Tournament history</summary>
+{% if alpha %}<p><a href="{{ url_for('tournament', tournament_id=alpha.tournament.id) }}"><img class="tournament-badge small" src="{{ badge_url(alpha.tournament.badge) }}" alt="">{{ alpha.tournament.name }}</a> · Alpha season · Winner: {{ alpha.names[alpha.state.champion] }}</p>{% endif %}
 <div class="table-scroll"><table><thead><tr><th>Name</th><th>System</th><th>Winner</th></tr></thead><tbody>
-{% for t in tournaments|reverse if states[t.id].complete %}<tr><td><a href="{{ url_for('tournament', tournament_id=t.id) }}">{% if t.classification == 'major' %}<img class="tournament-badge small" src="{{ badge_url(t.badge) }}" alt="">{% endif %}{{ t.name }}</a> <span class="classification">{{ t.classification|title }}</span></td><td>{{ systems[t.system] }}</td><td>{{ names.get(states[t.id].champion, '—') }}</td></tr>{% else %}<tr><td colspan="3" class="empty">No completed tournaments yet.</td></tr>{% endfor %}
+{% for t in tournaments|reverse if states[t.id].complete %}<tr><td><a href="{{ url_for('tournament', tournament_id=t.id) }}">{% if t.classification == 'major' %}<img class="tournament-badge small" src="{{ badge_url(t.badge) }}" alt="">{% endif %}{{ t.name }}</a> <span class="classification">{{ t.classification|title }}</span></td><td>{{ systems[t.system] }}</td><td>{{ names.get(states[t.id].champion, '—') }}</td></tr>{% else %}{% if not alpha %}<tr><td colspan="3" class="empty">No completed tournaments yet.</td></tr>{% endif %}{% endfor %}
 </tbody></table></div>
 </details>
 {% endblock %}

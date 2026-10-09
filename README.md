@@ -335,12 +335,24 @@ byes to their best seeds as needed. With nine players in three groups, the three
 winners fill a four-slot upper bracket (one bye); the other six enter the lower
 bracket, where the two best runners-up receive byes. Each upper round runs alongside a lower elimination round, followed
 by a lower round mixing its survivors with the upper losers. Further lower rounds
-are played if needed to determine a finalist. Byes are not matches and do not
-affect Elo.
+are played if needed to determine a finalist. The upper-final loser waits until
+the lower bracket has one survivor before entering its last round. Byes are not
+matches and do not affect Elo.
 
 Existing tournaments retain their original qualification and seeding rules. New
-tournaments save `format_version=2`; older CSV rows default to version 1 and are
+tournaments save `format_version=3`; older CSV rows default to version 1 and are
 upgraded without changing their format when another tournament is created.
+
+To apply the corrected lower-bracket routing to the ongoing Copa Turbo, deploy
+this version first, then run from the repository directory on the NAS:
+
+```sh
+sudo docker compose -p immer-ping -f compose.nas.yaml exec -T ping-pong python - < migrate_copa_turbo.py
+```
+
+This one-time migration backs up `tournaments.csv`, validates all completed and
+live fixtures against the new draw, and changes only Copa Turbo's format version.
+Do not run it against an older app image, which cannot read format 3.
 
 The bracket displays all played and currently available rounds, with the next
 playable fixture highlighted. Later rounds appear once their prerequisites finish.
@@ -525,3 +537,17 @@ PNG, JPEG, and WebP images up to 5 MB are cropped and resized to 512 × 512
 pixels and saved under the selected data directory’s `avatars/` folder. Include
 this folder in backups. Players without a picture use the default avatar.
 Pictures appear in Create match and live scoring.
+
+### Alpha season archive
+
+The Alpha season reset preserves final leaderboard positions and Elo in
+`data/alpha-season.json`. Overall Stats displays these standings, and the top
+three players keep gold, silver, and bronze Alpha season achievements. Copa
+Turbo's champion badge and read-only bracket history are also preserved there.
+The active match and tournament CSVs are empty after the reset; new matches
+start from 1000 Elo. Player registrations and avatars are unchanged.
+
+`python migrate_alpha_season.py [data-directory]` performs this one-time reset
+and refuses to run if the archive already exists. The repository's `data/`
+has already been migrated. Include the archive in backups and deploy the updated
+application code to show it in the UI. Existing backup files are untouched.

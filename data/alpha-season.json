@@ -1,0 +1,572 @@
+{
+  "name": "Alpha season",
+  "closed_at": "2026-10-07T16:33:49.678795+00:00",
+  "standings": [
+    {
+      "player_id": "22f7260358d340f9bb3082014a3c164f",
+      "name": "Guilherme",
+      "rank": 1,
+      "elo": 1235.5639084070312
+    },
+    {
+      "player_id": "c28d45531de9416d889331bc60c1c160",
+      "name": "Theo",
+      "rank": 2,
+      "elo": 1214.6549516948417
+    },
+    {
+      "player_id": "12b51900adf74509a418598487a23dcc",
+      "name": "Heitor",
+      "rank": 3,
+      "elo": 1188.4250969769232
+    },
+    {
+      "player_id": "f70164b806b64f54aaad44f91f5b4867",
+      "name": "Weber",
+      "rank": 4,
+      "elo": 1045.773733987828
+    },
+    {
+      "player_id": "6300b150f5f64f21b2082fdf839226f4",
+      "name": "Eduardo",
+      "rank": 5,
+      "elo": 1031.252142076191
+    },
+    {
+      "player_id": "0bfeb2be405f4ea5ba7e2efbcf44a4b8",
+      "name": "Hector",
+      "rank": 6,
+      "elo": 1023.9826229629957
+    },
+    {
+      "player_id": "9b0f0c0c97ed448ca376add2098eb997",
+      "name": "Luigi",
+      "rank": 7,
+      "elo": 1014.0597021436823
+    },
+    {
+      "player_id": "e6479a0d879a4040b230e7f6a6aaf96b",
+      "name": "Arthur",
+      "rank": 8,
+      "elo": 993.1246590565954
+    },
+    {
+      "player_id": "b6e81d4eabba4ae884ab211d31c785df",
+      "name": "Felipe",
+      "rank": 9,
+      "elo": 987.7814062793676
+    },
+    {
+      "player_id": "7bc88a605d7c406aa5d1067ba8db37e7",
+      "name": "André",
+      "rank": 10,
+      "elo": 981.147258568997
+    },
+    {
+      "player_id": "4427fcf09bd84f5280589e9ed7d0f31b",
+      "name": "Danilo",
+      "rank": 11,
+      "elo": 977.4607386998889
+    },
+    {
+      "player_id": "adae299c52c149748cddfe3ea0f2a1a1",
+      "name": "Luís",
+      "rank": 12,
+      "elo": 951.9897812910614
+    },
+    {
+      "player_id": "34a8f728f1bb4cb7bfe486878a8cde9b",
+      "name": "Barthos",
+      "rank": 13,
+      "elo": 881.6725948478994
+    },
+    {
+      "player_id": "ad9418c322f546a8b6008593ef5a0088",
+      "name": "Kaiser",
+      "rank": 14,
+      "elo": 714.8238503954673
+    },
+    {
+      "player_id": "4163c1934bd94fdcb9c44ab39ec4dae1",
+      "name": "Carvalho",
+      "rank": 15,
+      "elo": 701.7620510573652
+    }
+  ],
+  "tournament": {
+    "id": "8d03d9bdfc434c48bf265c9ad5b118da",
+    "name": "Copa Turbo",
+    "system": "group_double",
+    "created_at": "2026-09-25T18:48:52.137887+00:00",
+    "players": [
+      "22f7260358d340f9bb3082014a3c164f",
+      "c28d45531de9416d889331bc60c1c160",
+      "e6479a0d879a4040b230e7f6a6aaf96b",
+      "ad9418c322f546a8b6008593ef5a0088",
+      "6300b150f5f64f21b2082fdf839226f4",
+      "f2a281bb21234c959f7f7b8720458d28",
+      "34a8f728f1bb4cb7bfe486878a8cde9b",
+      "12b51900adf74509a418598487a23dcc"
+    ],
+    "groups": 2,
+    "classification": "major",
+    "badge": "3cbe7712ff6e4ed6a70c0e91df5e9957.png",
+    "format_version": 3,
+    "target_points": 7,
+    "target_stage": "semi",
+    "alternate_target": 11,
+    "bo3_stage": "semi",
+    "skipped_fixtures": [
+      "g2-r1-m2",
+      "g2-r2-m2",
+      "g2-r3-m1"
+    ]
+  },
+  "state": {
+    "fixtures": [
+      {
+        "id": "g1-r1-m1",
+        "stage": "Group 1",
+        "round": 1,
+        "player1": "22f7260358d340f9bb3082014a3c164f",
+        "player2": "34a8f728f1bb4cb7bfe486878a8cde9b",
+        "result": {
+          "score1": 7,
+          "score2": 4
+        },
+        "live_match": null,
+        "bye": false,
+        "winner": "22f7260358d340f9bb3082014a3c164f",
+        "target_points": 7,
+        "best_of": 1
+      },
+      {
+        "id": "g1-r1-m2",
+        "stage": "Group 1",
+        "round": 1,
+        "player1": "e6479a0d879a4040b230e7f6a6aaf96b",
+        "player2": "6300b150f5f64f21b2082fdf839226f4",
+        "result": {
+          "score1": 0,
+          "score2": 7
+        },
+        "live_match": null,
+        "bye": false,
+        "winner": "6300b150f5f64f21b2082fdf839226f4",
+        "target_points": 7,
+        "best_of": 1
+      },
+      {
+        "id": "g1-r2-m1",
+        "stage": "Group 1",
+        "round": 2,
+        "player1": "22f7260358d340f9bb3082014a3c164f",
+        "player2": "6300b150f5f64f21b2082fdf839226f4",
+        "result": {
+          "score1": 7,
+          "score2": 0
+        },
+        "live_match": null,
+        "bye": false,
+        "winner": "22f7260358d340f9bb3082014a3c164f",
+        "target_points": 7,
+        "best_of": 1
+      },
+      {
+        "id": "g1-r2-m2",
+        "stage": "Group 1",
+        "round": 2,
+        "player1": "34a8f728f1bb4cb7bfe486878a8cde9b",
+        "player2": "e6479a0d879a4040b230e7f6a6aaf96b",
+        "result": {
+          "score1": 1,
+          "score2": 7
+        },
+        "live_match": null,
+        "bye": false,
+        "winner": "e6479a0d879a4040b230e7f6a6aaf96b",
+        "target_points": 7,
+        "best_of": 1
+      },
+      {
+        "id": "g1-r3-m1",
+        "stage": "Group 1",
+        "round": 3,
+        "player1": "22f7260358d340f9bb3082014a3c164f",
+        "player2": "e6479a0d879a4040b230e7f6a6aaf96b",
+        "result": {
+          "score1": 3,
+          "score2": 7
+        },
+        "live_match": null,
+        "bye": false,
+        "winner": "e6479a0d879a4040b230e7f6a6aaf96b",
+        "target_points": 7,
+        "best_of": 1
+      },
+      {
+        "id": "g1-r3-m2",
+        "stage": "Group 1",
+        "round": 3,
+        "player1": "6300b150f5f64f21b2082fdf839226f4",
+        "player2": "34a8f728f1bb4cb7bfe486878a8cde9b",
+        "result": {
+          "score1": 7,
+          "score2": 3
+        },
+        "live_match": null,
+        "bye": false,
+        "winner": "6300b150f5f64f21b2082fdf839226f4",
+        "target_points": 7,
+        "best_of": 1
+      },
+      {
+        "id": "g2-r1-m1",
+        "stage": "Group 2",
+        "round": 1,
+        "player1": "c28d45531de9416d889331bc60c1c160",
+        "player2": "12b51900adf74509a418598487a23dcc",
+        "result": {
+          "score1": 7,
+          "score2": 3
+        },
+        "live_match": null,
+        "bye": false,
+        "winner": "c28d45531de9416d889331bc60c1c160",
+        "target_points": 7,
+        "best_of": 1
+      },
+      {
+        "id": "g2-r1-m2",
+        "stage": "Group 2",
+        "round": 1,
+        "player1": "ad9418c322f546a8b6008593ef5a0088",
+        "player2": "f2a281bb21234c959f7f7b8720458d28",
+        "result": {
+          "score1": 1,
+          "score2": 7
+        },
+        "live_match": null,
+        "bye": false,
+        "winner": "f2a281bb21234c959f7f7b8720458d28",
+        "target_points": 7,
+        "best_of": 1
+      },
+      {
+        "id": "g2-r2-m1",
+        "stage": "Group 2",
+        "round": 2,
+        "player1": "c28d45531de9416d889331bc60c1c160",
+        "player2": "f2a281bb21234c959f7f7b8720458d28",
+        "result": {
+          "score1": 9,
+          "score2": 7
+        },
+        "live_match": null,
+        "bye": false,
+        "winner": "c28d45531de9416d889331bc60c1c160",
+        "target_points": 7,
+        "best_of": 1
+      },
+      {
+        "id": "g2-r2-m2",
+        "stage": "Group 2",
+        "round": 2,
+        "player1": "12b51900adf74509a418598487a23dcc",
+        "player2": "ad9418c322f546a8b6008593ef5a0088",
+        "result": {
+          "score1": 7,
+          "score2": 4
+        },
+        "live_match": null,
+        "bye": false,
+        "winner": "12b51900adf74509a418598487a23dcc",
+        "target_points": 7,
+        "best_of": 1
+      },
+      {
+        "id": "g2-r3-m1",
+        "stage": "Group 2",
+        "round": 3,
+        "player1": "c28d45531de9416d889331bc60c1c160",
+        "player2": "ad9418c322f546a8b6008593ef5a0088",
+        "result": {
+          "score1": 7,
+          "score2": 5
+        },
+        "live_match": null,
+        "bye": false,
+        "winner": "c28d45531de9416d889331bc60c1c160",
+        "target_points": 7,
+        "best_of": 1
+      },
+      {
+        "id": "g2-r3-m2",
+        "stage": "Group 2",
+        "round": 3,
+        "player1": "f2a281bb21234c959f7f7b8720458d28",
+        "player2": "12b51900adf74509a418598487a23dcc",
+        "result": {
+          "score1": 4,
+          "score2": 7
+        },
+        "live_match": null,
+        "bye": false,
+        "winner": "12b51900adf74509a418598487a23dcc",
+        "target_points": 7,
+        "best_of": 1
+      },
+      {
+        "id": "u1-1",
+        "stage": "Upper bracket",
+        "round": 1,
+        "player1": "c28d45531de9416d889331bc60c1c160",
+        "player2": "22f7260358d340f9bb3082014a3c164f",
+        "result": {
+          "score1": 1,
+          "score2": 2
+        },
+        "live_match": null,
+        "bye": false,
+        "winner": "22f7260358d340f9bb3082014a3c164f",
+        "target_points": 11,
+        "best_of": 3
+      },
+      {
+        "id": "l1a-1",
+        "stage": "Lower bracket",
+        "round": 1,
+        "player1": "6300b150f5f64f21b2082fdf839226f4",
+        "player2": null,
+        "result": null,
+        "live_match": null,
+        "bye": true,
+        "winner": "6300b150f5f64f21b2082fdf839226f4",
+        "target_points": 7,
+        "best_of": 1
+      },
+      {
+        "id": "l1a-2",
+        "stage": "Lower bracket",
+        "round": 1,
+        "player1": "f2a281bb21234c959f7f7b8720458d28",
+        "player2": "ad9418c322f546a8b6008593ef5a0088",
+        "result": {
+          "score1": 7,
+          "score2": 4
+        },
+        "live_match": null,
+        "bye": false,
+        "winner": "f2a281bb21234c959f7f7b8720458d28",
+        "target_points": 7,
+        "best_of": 1
+      },
+      {
+        "id": "l1a-3",
+        "stage": "Lower bracket",
+        "round": 1,
+        "player1": "12b51900adf74509a418598487a23dcc",
+        "player2": null,
+        "result": null,
+        "live_match": null,
+        "bye": true,
+        "winner": "12b51900adf74509a418598487a23dcc",
+        "target_points": 7,
+        "best_of": 1
+      },
+      {
+        "id": "l1a-4",
+        "stage": "Lower bracket",
+        "round": 1,
+        "player1": "e6479a0d879a4040b230e7f6a6aaf96b",
+        "player2": "34a8f728f1bb4cb7bfe486878a8cde9b",
+        "result": {
+          "score1": 7,
+          "score2": 5
+        },
+        "live_match": null,
+        "bye": false,
+        "winner": "e6479a0d879a4040b230e7f6a6aaf96b",
+        "target_points": 7,
+        "best_of": 1
+      },
+      {
+        "id": "l1c2-1",
+        "stage": "Lower bracket",
+        "round": 2,
+        "player1": "6300b150f5f64f21b2082fdf839226f4",
+        "player2": "f2a281bb21234c959f7f7b8720458d28",
+        "result": {
+          "score1": 0,
+          "score2": 2
+        },
+        "live_match": null,
+        "bye": false,
+        "winner": "f2a281bb21234c959f7f7b8720458d28",
+        "target_points": 11,
+        "best_of": 3
+      },
+      {
+        "id": "l1c2-2",
+        "stage": "Lower bracket",
+        "round": 2,
+        "player1": "12b51900adf74509a418598487a23dcc",
+        "player2": "e6479a0d879a4040b230e7f6a6aaf96b",
+        "result": {
+          "score1": 2,
+          "score2": 0
+        },
+        "live_match": null,
+        "bye": false,
+        "winner": "12b51900adf74509a418598487a23dcc",
+        "target_points": 11,
+        "best_of": 3
+      },
+      {
+        "id": "l1c3-1",
+        "stage": "Lower bracket",
+        "round": 3,
+        "player1": "f2a281bb21234c959f7f7b8720458d28",
+        "player2": "12b51900adf74509a418598487a23dcc",
+        "result": {
+          "score1": 2,
+          "score2": 1
+        },
+        "live_match": null,
+        "bye": false,
+        "winner": "f2a281bb21234c959f7f7b8720458d28",
+        "target_points": 11,
+        "best_of": 3
+      },
+      {
+        "id": "l1b-1",
+        "stage": "Lower bracket",
+        "round": 4,
+        "player1": "f2a281bb21234c959f7f7b8720458d28",
+        "player2": "c28d45531de9416d889331bc60c1c160",
+        "result": {
+          "score1": 1,
+          "score2": 2
+        },
+        "live_match": null,
+        "bye": false,
+        "winner": "c28d45531de9416d889331bc60c1c160",
+        "target_points": 11,
+        "best_of": 3
+      },
+      {
+        "id": "final",
+        "stage": "Grand final",
+        "round": 1,
+        "player1": "22f7260358d340f9bb3082014a3c164f",
+        "player2": "c28d45531de9416d889331bc60c1c160",
+        "result": {
+          "score1": 1,
+          "score2": 2
+        },
+        "live_match": null,
+        "bye": false,
+        "winner": "c28d45531de9416d889331bc60c1c160",
+        "target_points": 11,
+        "best_of": 3
+      }
+    ],
+    "tables": [
+      {
+        "label": "Group 1",
+        "rows": [
+          {
+            "player": "22f7260358d340f9bb3082014a3c164f",
+            "wins": 2,
+            "losses": 1,
+            "scored": 17,
+            "conceded": 11,
+            "seed": 0
+          },
+          {
+            "player": "6300b150f5f64f21b2082fdf839226f4",
+            "wins": 2,
+            "losses": 1,
+            "scored": 14,
+            "conceded": 10,
+            "seed": 2
+          },
+          {
+            "player": "e6479a0d879a4040b230e7f6a6aaf96b",
+            "wins": 2,
+            "losses": 1,
+            "scored": 14,
+            "conceded": 11,
+            "seed": 1
+          },
+          {
+            "player": "34a8f728f1bb4cb7bfe486878a8cde9b",
+            "wins": 0,
+            "losses": 3,
+            "scored": 8,
+            "conceded": 21,
+            "seed": 3
+          }
+        ]
+      },
+      {
+        "label": "Group 2",
+        "rows": [
+          {
+            "player": "c28d45531de9416d889331bc60c1c160",
+            "wins": 3,
+            "losses": 0,
+            "scored": 23,
+            "conceded": 15,
+            "seed": 0
+          },
+          {
+            "player": "12b51900adf74509a418598487a23dcc",
+            "wins": 2,
+            "losses": 1,
+            "scored": 17,
+            "conceded": 15,
+            "seed": 3
+          },
+          {
+            "player": "f2a281bb21234c959f7f7b8720458d28",
+            "wins": 1,
+            "losses": 2,
+            "scored": 18,
+            "conceded": 17,
+            "seed": 2
+          },
+          {
+            "player": "ad9418c322f546a8b6008593ef5a0088",
+            "wins": 0,
+            "losses": 3,
+            "scored": 10,
+            "conceded": 21,
+            "seed": 1
+          }
+        ]
+      }
+    ],
+    "phase": "Completed",
+    "complete": true,
+    "champion": "c28d45531de9416d889331bc60c1c160"
+  },
+  "names": {
+    "34a8f728f1bb4cb7bfe486878a8cde9b": "Barthos",
+    "7bc88a605d7c406aa5d1067ba8db37e7": "André",
+    "22f7260358d340f9bb3082014a3c164f": "Guilherme",
+    "ad9418c322f546a8b6008593ef5a0088": "Kaiser",
+    "12b51900adf74509a418598487a23dcc": "Heitor",
+    "6300b150f5f64f21b2082fdf839226f4": "Eduardo",
+    "c28d45531de9416d889331bc60c1c160": "Theo",
+    "0bfeb2be405f4ea5ba7e2efbcf44a4b8": "Hector",
+    "e6479a0d879a4040b230e7f6a6aaf96b": "Arthur",
+    "4163c1934bd94fdcb9c44ab39ec4dae1": "Carvalho",
+    "4427fcf09bd84f5280589e9ed7d0f31b": "Danilo",
+    "f70164b806b64f54aaad44f91f5b4867": "Weber",
+    "b6e81d4eabba4ae884ab211d31c785df": "Felipe",
+    "9b0f0c0c97ed448ca376add2098eb997": "Luigi",
+    "adae299c52c149748cddfe3ea0f2a1a1": "Luís",
+    "f2a281bb21234c959f7f7b8720458d28": "Test"
+  }
+}
