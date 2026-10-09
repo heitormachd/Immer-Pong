@@ -508,7 +508,7 @@ class Store:
             return players, matches, tournaments
 
     def score_live_match(self, match_id, player_id, expected_revision, ace=False):
-        """Add a point, or undo the last point when player_id is None."""
+        """Add a point, or undo a point/server selection when player_id is None."""
         with self._locked():
             players, matches, tournaments = self._load()
             match = next((m for m in matches if m['id'] == match_id), None)
@@ -517,9 +517,12 @@ class Store:
             if match['revision'] != expected_revision:
                 raise StoreError('This match changed on another computer. Refresh before scoring again.')
             if player_id is None:
-                if not match['point_log']:
+                if match['point_log']:
+                    match['point_log'].pop()
+                elif match['first_server']:
+                    match['first_server'] = ''
+                else:
                     raise StoreError('There are no points to undo.')
-                match['point_log'].pop()
             else:
                 if match['status'] == 'completed':
                     raise StoreError('This match already has a winner.')

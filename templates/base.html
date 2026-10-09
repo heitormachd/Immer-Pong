@@ -11,7 +11,7 @@
 <main class="window">
   <header><h1>Ping-pong{% if config.TEST_SITE %} · Test server{% endif %}</h1>{% if tab %}<span class="loss" id="refresh-status" role="status"></span><noscript><a href="{{ request.url }}">Refresh</a></noscript>{% endif %}</header>
   <nav aria-label="Main tabs">
-  {% for endpoint, label in [('matches', 'Matches'), ('leaderboards', 'Leaderboards'), ('players', 'Players'), ('tournaments', 'Tournaments'), ('stats', 'Stats')] %}
+  {% for endpoint, label in [('matches', 'Matches'), ('leaderboards', 'Leaderboards'), ('players', 'Players'), ('tournaments', 'Tournaments'), ('stats', 'Stats'), ('watch_matches', 'Watch Matches')] %}
     <a href="{{ url_for(endpoint) }}" {% if tab == endpoint %}aria-current="page"{% endif %}>{{ label }}</a>
   {% endfor %}
   </nav>

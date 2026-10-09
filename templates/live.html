@@ -2,9 +2,12 @@
 {% from 'macros.html' import csrf, hidden, time with context %}
 {% block title %}Live scoring · Ping-pong{% endblock %}
 {% block content %}
+{% if not watching %}
 {% if match.tournament_id %}<a href="{{ url_for('tournament', tournament_id=match.tournament_id) }}">← Tournament</a>{% else %}<a href="{{ url_for('matches') }}">← Matches</a>{% endif %}
+{% endif %}
 <h2>{{ names[match.player1] }} vs {{ names[match.player2] }}</h2>
 <p>{{ 'Completed' if state.winner else 'In progress' }}</p>
+{% if match.first_server %}<p>First server: {{ names[match.first_server] }}</p>{% endif %}
 {% macro player_estimate(player, side) %}
 {% set estimate = estimates[player] if estimates else none %}
 <div class="match-estimate player-{{ side }}">
@@ -28,19 +31,20 @@
 {{ player_estimate(match.player2, 2) }}
 </div>
 {% if state.winner %}<p class="winner">Winner: {{ names[state.winner] }}</p>{% endif %}
+{% set scoring_url = url_for('live', match_id=match.id, watch='1') if watching else url_for('live', match_id=match.id) %}
 <div class="row scoring">
 {% if not match.first_server %}
 {% for player in [match.player1, match.player2] %}
-<form method="post">{{ csrf() }}{{ hidden('action', 'first_server') }}{{ hidden('player_id', player) }}{{ hidden('revision', match.revision) }}<button class="player-{{ loop.index }}">{{ names[player] }} to serve</button></form>
+<form method="post" action="{{ scoring_url }}">{{ csrf() }}{{ hidden('action', 'first_server') }}{{ hidden('player_id', player) }}{{ hidden('revision', match.revision) }}<button class="player-{{ loop.index }}">{{ names[player] }} to serve</button></form>
 {% endfor %}
 {% else %}
-{% for player in [match.player1, match.player2] %}<div class="scoring-player"><form method="post">{{ csrf() }}{{ hidden('action', 'point') }}{{ hidden('player_id', player) }}{{ hidden('revision', match.revision) }}<button class="player-{{ loop.index }}" {% if state.winner %}disabled{% endif %}>{{ names[player] }} +1 point</button></form><form method="post">{{ csrf() }}{{ hidden('action', 'point') }}{{ hidden('player_id', player) }}{{ hidden('revision', match.revision) }}{{ hidden('ace', '1') }}<button class="ace-button player-{{ loop.index }}" aria-label="Ace for {{ names[player] }}" {% if state.winner %}disabled{% endif %}>ACE!</button></form></div>{% endfor %}
+{% for player in [match.player1, match.player2] %}<div class="scoring-player"><form method="post" action="{{ scoring_url }}">{{ csrf() }}{{ hidden('action', 'point') }}{{ hidden('player_id', player) }}{{ hidden('revision', match.revision) }}<button class="player-{{ loop.index }}" {% if state.winner %}disabled{% endif %}>{{ names[player] }} +1 point</button></form><form method="post" action="{{ scoring_url }}">{{ csrf() }}{{ hidden('action', 'point') }}{{ hidden('player_id', player) }}{{ hidden('revision', match.revision) }}{{ hidden('ace', '1') }}<button class="ace-button player-{{ loop.index }}" aria-label="Ace for {{ names[player] }}" {% if state.winner %}disabled{% endif %}>ACE!</button></form></div>{% endfor %}
 {% endif %}
 </div>
 
 <div class="row">
-<form method="post" {% if state.winner %}data-confirm="Undo the winning point? This reopens the match and removes its result from the leaderboard."{% endif %}>{{ csrf() }}{{ hidden('action', 'undo') }}{{ hidden('revision', match.revision) }}<button {% if not match.point_log %}disabled{% endif %}>Undo last point{{ '…' if state.winner else '' }}</button></form>
-<form method="post" data-confirm="Delete this live match and all its points? Any completed result will also be removed.">{{ csrf() }}{{ hidden('action', 'delete') }}<button>Delete live match…</button></form>
+<form method="post" action="{{ scoring_url }}" {% if state.winner %}data-confirm="Undo the winning point? This reopens the match and removes its result from the leaderboard."{% endif %}>{{ csrf() }}{{ hidden('action', 'undo') }}{{ hidden('revision', match.revision) }}<button {% if not match.point_log and not match.first_server %}disabled{% endif %}>{{ 'Undo last point' if match.point_log or not match.first_server else 'Undo server selection' }}{{ '…' if state.winner else '' }}</button></form>
+<form method="post" action="{{ scoring_url }}" data-confirm="Delete this live match and all its points? Any completed result will also be removed.">{{ csrf() }}{{ hidden('action', 'delete') }}<button>Delete live match…</button></form>
 </div>
 <h2>Point history</h2>
 <div class="table-scroll"><table><thead><tr><th>Game</th><th>Point</th><th>Scorer</th><th>Type</th><th>Time</th><th>Cumulative score</th><th>Overtime</th></tr></thead><tbody>

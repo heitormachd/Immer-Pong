@@ -29,6 +29,86 @@ class WebTests(unittest.TestCase):
     def ledger(self):
         return {p.name: p.read_bytes() for p in Path(self.temp.name).glob('*.csv')}
 
+    def test_watch_matches_follows_live_match_lifecycle(self):
+        def watch():
+            response = self.client.get('/watch')
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('href="/watch" aria-current="page"', response.text)
+            self.assertIn('data-changes-url="/changes"', response.text)
+            self.assertLess(response.text.index('>Stats</a>'), response.text.index('>Watch Matches</a>'))
+            return response.text
+
+        self.assertIn('No live match is currently happening.', watch())
+        a, b, c, d = self.ids
+        match = self.store.create_live_match(a, b, 2)[1][-1]
+        self.assertIn('Alice vs Bob', watch())
+        self.store.set_first_server(match['id'], a, 0)
+        self.store.score_live_match(match['id'], a, 1)
+        self.assertIn('<strong>1 – 0</strong>', watch())
+        self.store.score_live_match(match['id'], a, 2)
+        self.assertIn('No live match is currently happening.', watch())
+        next_match = self.store.create_live_match(c, d, 2)[1][-1]
+        self.assertIn('Carol vs Dan', watch())
+        self.store.delete_match(next_match['id'])
+        self.assertIn('No live match is currently happening.', watch())
+
+    def test_watch_matches_shows_newest_active_match(self):
+        a, b, c, d = self.ids
+        self.store.create_live_match(a, b, 2)
+        newest = self.store.create_live_match(c, d, 2)[1][-1]
+        page = self.client.get('/watch').text
+        self.assertIn('Carol vs Dan', page)
+        self.assertNotIn('Alice vs Bob', page)
+        self.store.delete_match(newest['id'])
+        self.assertIn('Alice vs Bob', self.client.get('/watch').text)
+
+    def test_watch_scoring_stays_on_watch_and_uses_displayed_match(self):
+        a, b, c, d = self.ids
+        match = self.store.create_live_match(a, b, 2)[1][-1]
+        path = '/live/' + match['id'] + '?watch=1'
+        self.assertIn('action="' + path + '"', self.client.get('/watch').text)
+        for data in (dict(action='first_server', player_id=a, revision=0),
+                     dict(action='undo', revision=1),
+                     dict(action='first_server', player_id=b, revision=2),
+                     dict(action='point', player_id=a, revision=3, ace='1'),
+                     dict(action='undo', revision=4),
+                     dict(action='point', player_id=a, revision=5),
+                     dict(action='point', player_id=a, revision=6)):
+            response = self.post(path, **data)
+            self.assertEqual(response.status_code, 303)
+            self.assertEqual(response.location, '/watch')
+        self.assertIn('No live match is currently happening.', self.client.get('/watch').text)
+        match = self.store.create_live_match(a, b, 2)[1][-1]
+        path = '/live/' + match['id'] + '?watch=1'
+        newest = self.store.create_live_match(c, d, 2)[1][-1]
+        response = self.post(path, action='delete')
+        self.assertEqual(response.location, '/watch')
+        self.assertEqual(self.store.snapshot()[1][-1]['id'], newest['id'])
+        self.assertIn('Carol vs Dan', self.client.get('/watch').text)
+
+    def test_undo_server_selection_in_both_tabs(self):
+        a, b = self.ids[:2]
+        for watching in (False, True):
+            with self.subTest(watching=watching):
+                match = self.store.create_live_match(a, b, 2)[1][-1]
+                path = '/live/' + match['id']
+                page_path = '/watch' if watching else path
+                post_path = path + '?watch=1' if watching else path
+                self.post(post_path, action='first_server', player_id=a, revision=0)
+                page = self.client.get(page_path).text
+                self.assertIn('<button >Undo server selection</button>', page)
+                self.assertIn('Alice +1 point', page)
+                self.assertIn('>ACE!</button>', page)
+                self.assertEqual(self.post(post_path, action='undo', revision=1).status_code, 303)
+                page = self.client.get(page_path).text
+                self.assertIn('Alice to serve', page)
+                self.assertIn('Bob to serve', page)
+                self.assertIn('<button disabled>Undo last point</button>', page)
+                self.assertNotIn('+1 point', page)
+                self.assertEqual(self.post(post_path, action='first_server', player_id=b,
+                                           revision=2).status_code, 303)
+                self.assertEqual(self.store.snapshot()[1][-1]['first_server'], b)
+
     def test_player_avatar_upload_and_match_display(self):
         from io import BytesIO
         from PIL import Image

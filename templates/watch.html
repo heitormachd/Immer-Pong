@@ -1,0 +1,10 @@
+{% extends 'live.html' %}
+{% block title %}Watch Matches · Ping-pong{% endblock %}
+{% block content %}
+{% if match %}
+{{ super() }}
+{% else %}
+<h2>Watch Matches</h2>
+<p role="status">No live match is currently happening</p>
+{% endif %}
+{% endblock %}

@@ -226,6 +226,8 @@ Tests create temporary ledgers and do not modify the office CSV files:
 4. Use **Tournament** to create a named event, select its players and system, and
    start the highlighted next match from the bracket. Tournament matches always
    use live scoring; finishing one unlocks the next fixture.
+5. Open **Watch Matches**, after **Stats**, to score live matches and automatically
+   follow new ones, with a waiting message between matches.
 
 Delete an incorrect match from history and register it again. The replacement
 counts at its new registration position. Final-result entry requires a winner
@@ -283,6 +285,16 @@ results. In-progress matches do not affect leaderboards. Live scoring supports
 both ordinary matches and tournament fixtures; a tournament has one active
 fixture at a time.
 
+**Watch Matches** (`/watch`) uses the same live scoring screen and controls as
+**Matches**, including server selection, points, aces, undo, and deletion.
+It shows the most recently created in-progress match, including tournament
+fixtures, and automatically refreshes as scores change with JavaScript enabled.
+Scoring or finishing a match keeps you on **Watch Matches**. When no match is
+active, it displays “No live match is currently happening. The next match will
+appear automatically.” Creating a new live match displays it without navigating
+away or manually refreshing. If another match is still active, it is shown instead
+of the waiting message.
+
 At a tie one point below the target (for example, **6–6 when playing to 7**),
 overtime begins. Each overtime round contains two points:
 
@@ -301,6 +313,9 @@ and you must refresh before trying again. Players who retire after a match start
 can still finish it.
 
 **Undo last point** corrects a misclick and restores the prior overtime state.
+When a server has been selected but no points remain, the button becomes
+**Undo server selection**, allowing you to choose the correct player to serve.
+This works in both **Matches** and **Watch Matches**.
 Undoing a winning point requires confirmation and reopens the match, removing its
 result from the leaderboard until it finishes again. Finished live matches enter
 Elo history in completion order, not creation order. Re-finishing after an undo

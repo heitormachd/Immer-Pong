@@ -221,16 +221,27 @@ def create_app(data_directory=None, url_prefix=""):
                       duel=database_stats(data['players'], duel_matches)['personal']
                       if opponent_id else None, duel_count=len(duel_matches))
 
+    @app.get('/watch')
+    def watch_matches():
+        data = context()
+        match = next((m for m in reversed(data['matches'])
+                      if m['status'] == 'in_progress' and m['target_points']), None)
+        return render('watch.html', 'watch_matches', **data, watching=True, match=match,
+                      state=live_state(match) if match else None,
+                      estimates=match_elo_estimates(data['players'], data['matches'], match)
+                      if match else None)
+
     @app.route('/live/<match_id>', methods=['GET', 'POST'])
     def live(match_id):
         if request.method == 'POST':
+            watching = request.args.get('watch') == '1'
             action = request.form.get('action')
             if action in ('point', 'undo'):
                 player = request.form.get('player_id', '') if action == 'point' else None
                 _, rows, _ = store.score_live_match(match_id, player, integer('revision'),
                                                    ace=request.form.get('ace') == '1')
                 finished = next((m for m in rows if m['id'] == match_id), None)
-                if action == 'point' and finished and finished['status'] == 'completed':
+                if not watching and action == 'point' and finished and finished['status'] == 'completed':
                     if finished['tournament_id']:
                         return redirect(url_for('tournament', tournament_id=finished['tournament_id']), 303)
                     return redirect(url_for('matches'), 303)
@@ -238,10 +249,10 @@ def create_app(data_directory=None, url_prefix=""):
                 store.set_first_server(match_id, request.form.get('player_id', ''), integer('revision'))
             elif action == 'delete':
                 store.delete_match(match_id)
-                return redirect(url_for('matches'), 303)
+                return redirect(url_for('watch_matches' if watching else 'matches'), 303)
             else:
                 abort(400)
-            return redirect(url_for('live', match_id=match_id), 303)
+            return redirect(url_for('watch_matches') if watching else url_for('live', match_id=match_id), 303)
         data = context()
         match = next((m for m in data['matches'] if m['id'] == match_id and m['target_points']), None)
         if match is None:

@@ -150,6 +150,19 @@ class LiveStorageTests(unittest.TestCase):
         with self.assertRaisesRegex(StoreError, 'another computer'):
             self.store.score_live_match(match['id'], self.b, 0)
 
+    def test_undo_server_selection_persists_and_rejects_stale_scoring(self):
+        match = self.create()
+        match = self.point(match, None)
+        self.assertEqual(match['first_server'], '')
+        self.assertEqual(match['revision'], 2)
+        self.assertEqual(Store(self.temp.name).snapshot()[1][-1], match)
+        with self.assertRaisesRegex(StoreError, 'another computer'):
+            self.store.score_live_match(match['id'], self.a, 1)
+        with self.assertRaisesRegex(StoreError, 'first server'):
+            self.point(match, self.a)
+        with self.assertRaisesRegex(StoreError, 'no points'):
+            self.point(match, None)
+
     def test_failed_point_write_preserves_log_score_and_revision(self):
         match = self.create()
         before = (Path(self.temp.name) / 'matches.csv').read_bytes()
@@ -166,8 +179,6 @@ class LiveStorageTests(unittest.TestCase):
         match = self.create(2)
         with self.assertRaises(StoreError):
             self.point(match, 'unknown')
-        with self.assertRaises(StoreError):
-            self.point(match, None)
         self.store.set_active(self.a, False)
         with self.assertRaises(StoreError):
             self.create()
