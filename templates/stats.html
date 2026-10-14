@@ -50,7 +50,8 @@
 
 {% set personal = stats.personal[player_id] %}
 <dl class="stats-grid player-stats-grid">
-<div class="stat-card elo-card"><dt>Elo</dt><dd><strong>{{ '%.2f'|format(personal.elo) }}</strong><span class="stat-rank">{% if personal.rank %}Rank {{ personal.rank }}{% if personal.rank in [1, 2, 3] %} <span role="img" aria-label="{{ ['Gold', 'Silver', 'Bronze'][personal.rank - 1] }} medal">{{ ['🥇', '🥈', '🥉'][personal.rank - 1] }}</span>{% endif %}{% else %}Unranked{% endif %}</span></dd></div>
+<div class="stat-card elo-card"><dt>Glicko-2 rating ± RD</dt><dd><strong>{{ '%.1f'|format(personal.glicko) }} ± {{ '%.1f'|format(personal.glicko_rd) }}</strong><span class="stat-rank">{% if personal.rank %}Rank {{ personal.rank }}{% if personal.rank in [1, 2, 3] %} <span role="img" aria-label="{{ ['Gold', 'Silver', 'Bronze'][personal.rank - 1] }} medal">{{ ['🥇', '🥈', '🥉'][personal.rank - 1] }}</span>{% endif %}{% else %}Unranked{% endif %}</span></dd></div>
+{{ number('Elo (match history)', '%.2f'|format(personal.elo)) }}
 {{ rate('Match winrate', dict(wins=personal.wins, total=personal.matches)) }}
 {{ rate('Points winrate', dict(wins=personal.scored, total=personal.scored + personal.conceded)) }}
 {{ number('Net Points', '%.2f'|format(personal.net_points) if personal.net_points is not none else '—') }}

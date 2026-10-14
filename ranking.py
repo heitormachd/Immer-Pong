@@ -1,9 +1,132 @@
 """Rebuild standings from the match ledger, in registration order."""
 
 from statistics import median
-from math import comb
+from math import comb, exp, log, pi, sqrt
+from datetime import date, datetime, timezone
 
 from live_scoring import individual_matches, live_state
+
+
+_GLICKO_SCALE = 173.7178
+_GLICKO_TAU = 0.5
+_GLICKO_EPSILON = 0.000001
+
+
+def _glicko2_f(x, delta, phi, variance, a, tau):
+    ex = exp(x)
+    return (ex * (delta * delta - phi * phi - variance - ex)
+            / (2 * (phi * phi + variance + ex) ** 2) - (x - a) / tau ** 2)
+
+
+def _glicko2_volatility(phi, sigma, delta, variance):
+    """Apply Glickman’s Illinois root finder to update rating volatility."""
+    tau = _GLICKO_TAU
+    a = log(sigma * sigma)
+    if delta * delta > phi * phi + variance:
+        b = log(delta * delta - phi * phi - variance)
+    else:
+        k = 1
+        while _glicko2_f(a - k * tau, delta, phi, variance, a, tau) < 0:
+            k += 1
+        b = a - k * tau
+
+    fa = _glicko2_f(a, delta, phi, variance, a, tau)
+    fb = _glicko2_f(b, delta, phi, variance, a, tau)
+    while abs(b - a) > _GLICKO_EPSILON:
+        c = a + (a - b) * fa / (fb - fa)
+        fc = _glicko2_f(c, delta, phi, variance, a, tau)
+        if fc * fb <= 0:
+            a, fa = b, fb
+        else:
+            fa /= 2
+        b, fb = c, fc
+    return exp(a / 2)
+
+
+def _rating_period(timestamp):
+    """Use UTC calendar weeks as Glicko-2 rating periods."""
+    value = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    year, week, _ = value.astimezone(timezone.utc).isocalendar()
+    return date.fromisocalendar(year, week, 1).toordinal() // 7
+
+
+def glicko2_ratings(players, matches):
+    """Return Glicko-2 rating, RD, volatility and conservative score per player."""
+    ratings = {p['id']: dict(rating=1500.0, deviation=350.0, volatility=0.06,
+                             last_period=None, matches=0) for p in players}
+    games = individual_matches(matches)
+    periods = {}
+    for position, match in enumerate(games):
+        if match.get('status', 'completed') != 'completed':
+            continue
+        try:
+            period = _rating_period(match['timestamp'])
+        except (KeyError, TypeError, ValueError):
+            # Legacy in-memory callers may omit timestamps. Preserve their row order.
+            period = 10 ** 9 + position
+        periods.setdefault(period, []).append(match)
+
+    for period, period_games in sorted(periods.items()):
+        outcomes = {player_id: [] for player_id in ratings}
+        for match in period_games:
+            a, b = match['player1'], match['player2']
+            outcomes[a].append((b, float(match['score1'] > match['score2'])))
+            outcomes[b].append((a, float(match['score2'] > match['score1'])))
+
+        # Grow uncertainty through skipped weekly periods. A player’s active
+        # period is handled by the regular Glicko-2 update below.
+        for player_id, state in ratings.items():
+            if state['last_period'] is None:
+                continue
+            gap = period - state['last_period'] - (1 if outcomes[player_id] else 0)
+            if gap > 0:
+                phi = state['deviation'] / _GLICKO_SCALE
+                state['deviation'] = _GLICKO_SCALE * sqrt(
+                    phi * phi + gap * state['volatility'] * state['volatility'])
+            if not outcomes[player_id]:
+                state['last_period'] = period
+
+        before = {player_id: (state['rating'], state['deviation'], state['volatility'])
+                  for player_id, state in ratings.items()}
+        for player_id, games_for_player in outcomes.items():
+            if not games_for_player:
+                continue
+            rating, deviation, sigma = before[player_id]
+            mu, phi = (rating - 1500) / _GLICKO_SCALE, deviation / _GLICKO_SCALE
+            terms = []
+            for opponent, score in games_for_player:
+                opponent_rating, opponent_deviation, _ = before[opponent]
+                opponent_mu = (opponent_rating - 1500) / _GLICKO_SCALE
+                opponent_phi = opponent_deviation / _GLICKO_SCALE
+                g = 1 / sqrt(1 + 3 * opponent_phi * opponent_phi / (pi * pi))
+                expected = 1 / (1 + exp(-g * (mu - opponent_mu)))
+                terms.append((g, expected, score))
+            variance = 1 / sum(g * g * expected * (1 - expected)
+                               for g, expected, _ in terms)
+            delta = variance * sum(g * (score - expected)
+                                   for g, expected, score in terms)
+            sigma_prime = _glicko2_volatility(phi, sigma, delta, variance)
+            phi_star = sqrt(phi * phi + sigma_prime * sigma_prime)
+            phi_prime = 1 / sqrt(1 / (phi_star * phi_star) + 1 / variance)
+            mu_prime = mu + phi_prime * phi_prime * sum(
+                g * (score - expected) for g, expected, score in terms)
+            state = ratings[player_id]
+            state.update(rating=_GLICKO_SCALE * mu_prime + 1500,
+                         deviation=_GLICKO_SCALE * phi_prime,
+                         volatility=sigma_prime, last_period=period,
+                         matches=state['matches'] + len(games_for_player))
+
+    current_period = _rating_period(datetime.now(timezone.utc).isoformat())
+    for state in ratings.values():
+        if state['last_period'] is not None and current_period > state['last_period']:
+            gap = current_period - state['last_period']
+            phi = state['deviation'] / _GLICKO_SCALE
+            state['deviation'] = _GLICKO_SCALE * sqrt(
+                phi * phi + gap * state['volatility'] * state['volatility'])
+        state['conservative'] = state['rating'] - 2 * state['deviation']
+    return ratings
 
 
 def elo_win_probability(elo1, elo2):
@@ -158,13 +281,17 @@ def database_stats(players, matches):
             performance[match['player1']] += change / 32
             performance[match['player2']] -= change / 32
     srs = simple_ratings(players, matches)
-    ranks = {row['player']['id']: row['rank'] for row in standings(players, matches)}
+    standing_rows = standings(players, matches)
+    standing_by_player = {row['player']['id']: row for row in standing_rows}
     for player_id, row in summaries.items():
         tracked = clutch[player_id]
+        standing = standing_by_player.get(player_id, {})
         personal[player_id].update(
             clutch=100 * tracked['residual'] / tracked['weight'] if tracked['weight'] else None,
-            clutch_matches=tracked['matches'])
-        personal[player_id].update(rank=ranks.get(player_id), srs=srs[player_id],
+            clutch_matches=tracked['matches'], rank=standing.get('rank'),
+            glicko=standing.get('glicko', 1500.0),
+            glicko_rd=standing.get('glicko_rd', 350.0))
+        personal[player_id].update(srs=srs[player_id],
                                    pd=row['scored'] - row['conceded'],
                                    net_points=(row['scored'] - row['conceded']) / row['matches']
                                    if row['matches'] else None, elo=row['elo'], matches=row['matches'], wins=row['wins'],
@@ -235,8 +362,14 @@ def match_elo_history(players, matches):
 
 def standings(players, matches):
     stats, _ = _replay(players, matches)
+    ratings = glicko2_ratings(players, matches)
     active = [s for s in stats.values() if s['player']['active']]
-    active.sort(key=lambda s: (not bool(s['matches']), -s['elo'],
+    for row in active:
+        rating = ratings[row['player']['id']]
+        row['glicko'] = rating['rating']
+        row['glicko_rd'] = rating['deviation']
+        row['glicko_lower'] = rating['conservative']
+    active.sort(key=lambda s: (not bool(s['matches']), -s['glicko_lower'],
                                s['player']['name'].casefold()))
     for rank, row in enumerate(active, 1):
         row['rank'] = rank if row['matches'] else None
