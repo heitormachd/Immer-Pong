@@ -252,22 +252,11 @@ R_2' &= R_2 - \Delta R_1.
 \end{aligned}
 ```
 
-Elo remains the rating used for match estimates and match-history changes.
-Each player's first Elo is 1000. Point margin does not affect Elo. All
+Each player's first rating is 1000. Point margin does not affect Elo. All
 historical matches, including retired players' matches, are replayed in CSV row
-order.
-
-The leaderboard uses Glicko-2, independently of Elo. It starts players at
-1500 with a rating deviation (RD) of 350 and volatility of 0.06. Completed
-matches are grouped into UTC calendar weeks as rating periods. A player's
-Glicko-2 rating estimates strength; RD represents uncertainty and grows through
-inactive weeks. The leaderboard orders players by the conservative estimate
-`rating - 2 × RD` (the lower end of the 95% interval), while displaying the
-rating and RD. This keeps uncertain ratings from outranking well-established
-ones solely on a high early estimate. Only active players appear, and players
-without completed matches remain unranked. Alphabetical order breaks exact
-ties. The player Stats page shows the same Glicko-2 rating and rank; its Elo
-value and the Median Elo statistic remain available for comparison.
+order. Only active players appear in the leaderboard; players without matches
+are unranked. Exact Elo determines ranking, with alphabetical ties; the
+displayed rating is rounded.
 Match history places **P1 ELO** beside Player 1 and **P2 ELO** beside Player 2.
 Each cell shows the pre-match rating in the normal text color, followed by its
 change in green for a gain or red for a loss, for example `1000.00 (+16.00)`.
