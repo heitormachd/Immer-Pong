@@ -13,6 +13,13 @@ def live_state(match):
     best_of = match.get('best_of', 1)
     if best_of not in (1, 3):
         raise ValueError('Invalid best-of format')
+    serve_rule = match.get('serve_rule', 'winner_serves')
+    if serve_rule not in ('winner_serves', 'two_serves'):
+        raise ValueError('Invalid serve rule')
+    first_server = match.get('first_server', players[0])
+    server = first_server
+    # Derived Bo3 games can begin halfway through a two-serve turn.
+    serve_offset = match.get('serve_offset', 0)
     games = [0, 0]
     total, overtime_score = [0, 0], [0, 0]
     overtime_round, winner, history = 0, None, []
@@ -46,15 +53,21 @@ def live_state(match):
             if games[players.index(game_winner)] < best_of // 2 + 1:
                 winner = None
         history.append(dict(game=game_number, number=number, player=event['player'], timestamp=event['timestamp'],
-                            ace=event.get('ace', False), score1=total[0], score2=total[1], overtime_round=played_round,
+                            ace=event.get('ace', False), server=server,
+                            score1=total[0], score2=total[1], overtime_round=played_round,
                             overtime_score=tuple(overtime_score), reset=reset))
+        if serve_rule == 'two_serves':
+            server = players[(players.index(first_server) + (number + serve_offset) // 2) % 2]
+        else:
+            server = event['player']
         if game_winner is not None and winner is None:
             total, overtime_score = [0, 0], [0, 0]
             overtime_round = 0
     return dict(score1=games[0] if best_of == 3 else total[0],
                 score2=games[1] if best_of == 3 else total[1], winner=winner,
                 game_score=tuple(total), games=tuple(games), best_of=best_of,
-                overtime_round=overtime_round, overtime_score=tuple(overtime_score), history=history)
+                overtime_round=overtime_round, overtime_score=tuple(overtime_score), history=history,
+                server=server if winner is None else None)
 
 
 def individual_matches(matches):
@@ -76,8 +89,8 @@ def individual_matches(matches):
                                 series_id=match['id'], game=game, best_of=1,
                                 score1=points[-1]['score1'], score2=points[-1]['score2'],
                                 timestamp=points[-1]['timestamp'], status='completed',
-                                first_server=(match['first_server'] if start == 0
-                                              else match['point_log'][start - 1]['player']),
+                                first_server=points[0]['server'],
+                                serve_offset=start % 2 if match.get('serve_rule') == 'two_serves' else 0,
                                 point_log=match['point_log'][start:end]))
             start = end
     results.sort(key=lambda m: m['timestamp'])

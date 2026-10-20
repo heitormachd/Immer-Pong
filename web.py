@@ -147,7 +147,8 @@ def create_app(data_directory=None, url_prefix=""):
             elif action == 'create_live':
                 _, rows, _ = store.create_live_match(request.form.get('player1'),
                                                     request.form.get('player2'), integer('target'),
-                                                    best_of=3 if request.form.get('bo3') == '1' else 1)
+                                                    best_of=3 if request.form.get('bo3') == '1' else 1,
+                                                    serve_rule=request.form.get('serve_rule', 'two_serves'))
                 return redirect(url_for('live', match_id=rows[-1]['id']), 303)
             elif action == 'delete':
                 store.delete_match(request.form.get('match_id'))
@@ -289,7 +290,8 @@ def create_app(data_directory=None, url_prefix=""):
                     target_stage='all' if system == 'round_robin' else request.form.get('target_stage', 'all'),
                     alternate_target=integer('alternate_target') if system != 'round_robin' and 'alternate_target' in request.form else 11,
                     bo3_stage=('all' if request.form.get('bo3_stage') == 'all' else 'none')
-                    if system == 'round_robin' else request.form.get('bo3_stage', 'none'))
+                    if system == 'round_robin' else request.form.get('bo3_stage', 'none'),
+                    serve_rule=request.form.get('serve_rule', 'two_serves'))
             except StoreError:
                 if saved:
                     (directory / 'badges' / saved).unlink(missing_ok=True)

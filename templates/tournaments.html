@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from 'macros.html' import csrf with context %}
+{% from 'macros.html' import csrf, serve_rule_select with context %}
 {% block content %}
 <h2>Tournaments</h2>
 <section class="box ongoing-tournaments" aria-labelledby="ongoing-tournaments-title">
@@ -14,10 +14,12 @@
 <fieldset><legend>Match scoring</legend>
 <div class="row">
 <label>Target points<input type="number" name="target" min="2" value="7" required></label>
-<label id="target-stage-field">Target points apply to<select name="target_stage" id="target-stage"><option value="all">All matches</option><option value="final" selected>Differ in finals</option><option value="semi">Differ from semifinals onward</option><option value="quarter">Differ from quarterfinals onward</option></select></label>
+<label id="target-stage-field">Target points apply to<select name="target_stage" id="target-stage"><option value="all">All matches</option><option value="final" selected>Alternative in finals</option><option value="semi">Alternative from semifinals onward</option><option value="quarter">Alternative from quarterfinals onward</option></select></label>
 <label id="alternate-target-field">Alternative target points<input type="number" name="alternate_target" min="2" value="11" required></label>
-<label>Bo3 matches<select name="bo3_stage" id="bo3-stage"><option value="none">No matches</option><option value="final" selected>Only in finals</option><option value="semi">From semifinals onward</option><option value="quarter">From quarterfinals onward</option><option value="all">All matches</option></select></label>
 </div>
+<div class="row"><label>Bo3 matches<select name="bo3_stage" id="bo3-stage"><option value="none">No matches</option><option value="final" selected>Only in finals</option><option value="semi">From semifinals onward</option><option value="quarter">From quarterfinals onward</option><option value="all">All matches</option></select></label>
+</div>
+<div class="row">{{ serve_rule_select() }}<span class="muted"></span></div>
 </fieldset>
 <label>Classification<select name="classification" id="classification" required><option value="minor">Minor</option><option value="major">Major</option></select></label>
 <p class="muted">Minor: play matches without a title achievement. Major: the winner earns a badge in Player Stats.</p>

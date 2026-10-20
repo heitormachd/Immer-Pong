@@ -167,6 +167,32 @@ class WebTests(unittest.TestCase):
         self.assertEqual(response.status_code, 303)
         self.assertEqual(self.store.snapshot()[1][-1]['best_of'], 1)
 
+    def test_match_creation_saves_serving_choice_and_rejects_unknown_rule(self):
+        a, b = self.ids[:2]
+        page = self.client.get('/').text
+        self.assertIn('<option value="two_serves">Two serves each</option>', page)
+        self.assertIn('<option value="winner_serves">Winner serves</option>', page)
+        for rule in ('winner_serves', 'two_serves'):
+            response = self.post('/', action='create_live', player1=a, player2=b,
+                                 target=7, serve_rule=rule)
+            self.assertEqual(response.status_code, 303)
+            match = self.store.snapshot()[1][-1]
+            self.assertEqual(match['serve_rule'], rule)
+            self.post(response.location, action='first_server', player_id=b, revision=0)
+            self.post(response.location, action='point', player_id=a, revision=1)
+            page = self.client.get(response.location).text
+            server = 'Alice' if rule == 'winner_serves' else 'Bob'
+            self.assertIn(f'aria-label="{server} to serve"', page)
+            self.assertNotIn('Last serve:', page)
+            if rule == 'winner_serves':
+                self.assertNotIn('class="serve-turn"', page)
+            else:
+                self.assertIn('aria-label="Serve 2 of 2"', page)
+        before = self.ledger()
+        self.assertEqual(self.post('/', action='create_live', player1=a, player2=b,
+                                   target=7, serve_rule='unknown').status_code, 409)
+        self.assertEqual(self.ledger(), before)
+
     def test_bo3_final_results_register_each_game_atomically(self):
         a, b = self.ids[:2]
         response = self.post('/', action='register', player1=a, player2=b, bo3='1',
@@ -249,6 +275,7 @@ class WebTests(unittest.TestCase):
         match = self.store.snapshot()[1][-1]
         self.assertEqual((match['player1'], match['player2']), (c, d))
         self.assertEqual((match['target_points'], match['best_of']), (7, 1))
+        self.assertEqual(match['serve_rule'], 'winner_serves')
         self.assertEqual(match['status'], 'in_progress')
         self.assertTrue(response.location.endswith('/live/' + match['id']))
 
@@ -345,7 +372,7 @@ class WebTests(unittest.TestCase):
         self.assertNotIn('Alice vs Bob', page.text)
         duel = page.text
         self.assertIn('<dt>Matches played</dt><dd><strong>1</strong>', duel)
-        self.assertIn('33.3%', duel)  # Alice wins 1 of 3 serves against Bob.
+        self.assertIn('25.0%', duel)  # Alice wins 1 of 4 serves against Bob.
         self.assertIn('0/2', duel)  # Alice converts neither match point.
         self.assertNotIn('Bob in this duel', duel)
 
@@ -411,7 +438,9 @@ class WebTests(unittest.TestCase):
                 match = self.store.snapshot()[1][-1]
                 self.assertEqual((match['first_server'], match['point_log'], match['revision']), (server, [], 1))
                 page = self.client.get(path).text
-                self.assertIn('First server: ' + name, page)
+                self.assertIn(f'aria-label="{name} to serve"', page)
+                self.assertNotIn('First server:', page)
+                self.assertNotIn('Last serve:', page)
                 self.assertEqual(page.count('>ACE!</button>'), 2)
                 self.assertNotIn('to serve</button>', page)
                 self.assertEqual(self.post(path, action='first_server', player_id=a, revision=0).status_code, 409)
@@ -419,6 +448,22 @@ class WebTests(unittest.TestCase):
                 self.assertEqual(self.post(path, action='first_server', player_id=a, revision=2).status_code, 409)
                 self.assertEqual(self.post(path, action='undo', revision=2).status_code, 303)
                 self.assertEqual(self.store.snapshot()[1][-1]['first_server'], server)
+
+    def test_current_server_rotates_in_live_and_watch_views_and_undo(self):
+        a, b = self.ids[:2]
+        path = self.post('/', action='create_live', player1=a, player2=b, target=7).location
+        self.post(path, action='first_server', player_id=b, revision=0)
+        for revision, server in enumerate(('Bob', 'Bob', 'Alice'), 1):
+            for view in (path, '/watch'):
+                page = self.client.get(view).text
+                self.assertNotIn('class="serve-rule"', page)
+                self.assertIn(f'aria-label="{server} to serve"', page)
+                self.assertIn(f'aria-label="Serve {(revision - 1) % 2 + 1} of 2"', page)
+                self.assertNotIn('Last serve:', page)
+            if revision < 3:
+                self.post(path, action='point', player_id=a, revision=revision)
+        self.post(path, action='undo', revision=3)
+        self.assertIn('aria-label="Bob to serve"', self.client.get(path).text)
 
     def test_live_elo_estimates_follow_current_ratings(self):
         a, b = self.ids[:2]
@@ -510,8 +555,15 @@ class WebTests(unittest.TestCase):
 
     def test_tournament_matches_use_live_scoring_and_unlock_next_fixture(self):
         a, b = self.ids[:2]
+        page = self.client.get('/tournaments').text
+        self.assertEqual(page.count('name="serve_rule"'), 1)
+        self.assertIn('Applies to every match in the tournament.', page)
+        before = self.ledger()
+        self.assertEqual(self.post('/tournaments', name='Invalid cup', system='single',
+                                   participants=[a, b], serve_rule='unknown').status_code, 409)
+        self.assertEqual(self.ledger(), before)
         response = self.post('/tournaments', name='Live cup', system='single',
-                             participants=[a, b], groups=1, target=2)
+                             participants=[a, b], groups=1, target=2, serve_rule='winner_serves')
         tournament_path = response.location
         tournament = self.store.snapshot()[2][-1]
         fixture = next(f for f in tournament_state(tournament, [])["fixtures"]
@@ -522,10 +574,13 @@ class WebTests(unittest.TestCase):
         self.assertIn('Start live match', page.text)
         self.assertNotIn('Register result', page.text)
         self.assertNotIn('<h4>Bracket</h4>', page.text)
-
+        self.assertNotIn('name="serve_rule"', page.text)
+        self.assertIn('Serving rule: Winner serves · All matches', page.text)
         response = self.post(tournament_path, action='start_live', fixture_id=fixture['id'],
-                             player1=fixture['player1'], player2=fixture['player2'])
+                             player1=fixture['player1'], player2=fixture['player2'],
+                             serve_rule='two_serves')
         self.assertEqual(response.status_code, 303)
+        self.assertEqual(self.store.snapshot()[1][-1]['serve_rule'], 'winner_serves')
         live_path = response.location
         self.assertEqual(self.post(live_path, action='first_server', player_id=a, revision=0).status_code, 303)
         self.assertIn('Open live score', self.client.get(tournament_path).text)
@@ -537,6 +592,9 @@ class WebTests(unittest.TestCase):
         self.assertTrue(tournament_state(tournament, self.store.snapshot()[1])['complete'])
         completed_page = self.client.get(tournament_path).text
         self.assertNotIn('Next match', completed_page)
+        review = self.client.get(live_path).text
+        self.assertNotIn('class="serve-badge"', review)
+        self.assertNotIn('Last serve:', review)
 
     def test_tournament_next_match_can_be_skipped_and_started_later(self):
         response = self.post('/tournaments', name='Queued cup', system='round_robin',
@@ -559,6 +617,7 @@ class WebTests(unittest.TestCase):
         page = self.client.get(tournament_path).text
         self.assertIn('Skipped for now', page)
         self.assertIn('Play now', page)
+        self.assertNotIn('name="serve_rule"', page)
         next_card = page.split('<section class="next-match" id="next-match">', 1)[1].split('</section>', 1)[0]
         self.assertIn(names[second['player1']], next_card)
         other_client = self.app.test_client()

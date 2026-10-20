@@ -126,10 +126,10 @@ def database_stats(players, matches):
             baseline = state['score1'] / len(state['history'])
             for player in sides:
                 clutch[player]['matches'] += 1
-        server = match.get('first_server', sides[0])
         scores, overtime, overtime_score = (0, 0), 0, (0, 0)
         for point in state['history']:
             winner = point['player']
+            server = point['server']
             if complete_log:
                 weight = point_leverage(match['target_points'], scores, overtime)
                 residual = weight * (int(winner == sides[0]) - baseline)
@@ -145,7 +145,6 @@ def database_stats(players, matches):
                     record(overall['match_point'], winner == player)
                     record(personal[player]['match_point'], winner == player)
                     record(personal[sides[1 - side]]['against'], winner != player)
-            server = winner
             scores = (point['score1'], point['score2'])
             overtime_score = point['overtime_score']
             overtime = point['overtime_round'] or int(scores == (match['target_points'] - 1,) * 2)

@@ -1,5 +1,8 @@
 {% macro csrf() -%}<input type="hidden" name="csrf" value="{{ session.csrf }}">{%- endmacro %}
 {% macro hidden(name, value) -%}<input type="hidden" name="{{ name }}" value="{{ value }}">{%- endmacro %}
+{% macro serve_rule_select(live_only=false) %}
+<label{% if live_only %} data-live-serve{% endif %}>Serving rule<select name="serve_rule"><option value="two_serves">Two serves each</option><option value="winner_serves">Winner serves</option></select></label>
+{% endmacro %}
 {% macro player_select(name, label, active) %}
 <label>{{ label }}<select name="{{ name }}" required><option value="">Select player…</option>{% for p in active %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select></label>
 {% endmacro %}

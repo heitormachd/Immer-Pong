@@ -393,7 +393,22 @@ have IDs, UTC timestamps, player IDs, integer scores, and optional tournament an
 fixture IDs. The `first_server` column stores the starting server’s player ID;
 existing matches default to Player 1. New live matches show a “{player name} to serve”
 button for each player at 0–0. Choose one to enable point and ACE buttons.
-The winner of each point serves next, and serve statistics use the saved first server.
+Choose **Two serves each** (the default) or **Winner serves** when creating a
+regular match or a tournament. A tournament's rule applies to every match and
+cannot differ by stage or be overridden when starting a fixture. Older tournament
+tables default to **Winner serves** and are upgraded on the next tournament save;
+already recorded matches retain their own saved rules.
+Rematches keep the previous match's serving rule.
+With **Two serves each**, matches alternate servers every two points, starting with the selected
+player, regardless of who wins each point. The rotation continues through overtime
+resets and between games in a best-of-three match. The live page marks the
+next server with a compact badge containing the serving-turn counter.
+Point history also lists each server; undo restores the previous serving turn.
+The `serve_rule` column records the selected rule for new live matches. Existing matches
+(including those already in progress) default to `winner_serves`: the point winner
+serves next. Serve statistics replay each match using its saved rule and first
+server, preserving historical statistics. Startup backs up and upgrades older
+tables automatically.
 Live matches also use these columns in the same match table:
 `target_points`, `point_log`, `status`, and `revision`. `point_log` is an ordered
 JSON list of objects containing the scoring player's stable ID (`player`) and UTC

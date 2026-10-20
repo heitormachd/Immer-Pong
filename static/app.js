@@ -22,6 +22,7 @@ if (matchForm) {
   const action = matchForm.querySelector('input[name="action"]');
   const targetField = matchForm.querySelector('[data-live-target]');
   const targetInput = targetField.querySelector('input');
+  const serveField = matchForm.querySelector('[data-live-serve]');
   const finalScoreFields = [...matchForm.querySelectorAll('[data-final-score]')];
   const submit = matchForm.querySelector('[data-match-submit]');
 
@@ -88,6 +89,8 @@ if (matchForm) {
     const bo3 = bo3Field.querySelector('input').checked;
     targetField.hidden = isFinal;
     targetInput.disabled = isFinal;
+    serveField.hidden = isFinal;
+    serveField.querySelector('select').disabled = isFinal;
     const winners = [1, 2].map(game => {
       const fields = finalScoreFields[game - 1].querySelectorAll('input');
       return Math.sign(Number(fields[0].value) - Number(fields[1].value));

@@ -42,6 +42,21 @@ class StatsTests(unittest.TestCase):
             result = database_stats(self.players, [match])
             self.assertEqual(result['overall']['server'], dict(wins=0, total=0))
 
+    def test_mixed_serve_rules_keep_historical_statistics(self):
+        old = self.match('bbb', target=3)
+        old.update(id='old', first_server='a')
+        new = dict(old, id='new', serve_rule='two_serves')
+        legacy = database_stats(self.players, [old])
+        self.assertEqual(legacy['overall']['server'], dict(wins=2, total=3))
+        modern = database_stats(self.players, [new])
+        self.assertEqual(modern['personal']['a']['server'], dict(wins=0, total=2))
+        self.assertEqual(modern['personal']['b']['server'], dict(wins=1, total=1))
+        mixed = database_stats(self.players, [old, new])
+        self.assertEqual(mixed['overall']['server'], dict(wins=3, total=6))
+        self.assertEqual(mixed['personal']['a']['server'], dict(wins=0, total=3))
+        self.assertEqual(mixed['personal']['b']['server'], dict(wins=3, total=3))
+        self.assertEqual(database_stats(self.players, [old]), legacy)
+
     def test_empty_database(self):
         result = database_stats([], [])
         self.assertIsNone(result['median_elo'])

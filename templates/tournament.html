@@ -5,6 +5,7 @@
 <h2 class="tournament-heading">{% if event.classification == 'major' %}<img class="tournament-badge" src="{{ badge_url(event.badge) }}" alt="Tournament badge">{% endif %}{{ event.name }}</h2>
 {% if archived %}<p>Alpha season · Archived tournament history · Read-only</p>{% endif %}
 <p>{{ event.classification|title }} · {{ systems[event.system] }} · {{ event.players|length }} players · {{ state.phase }}{% if state.champion %} · <b>Winner: {{ names[state.champion] }}</b>{% endif %}</p>
+{% if not archived %}<p class="muted">Serving rule: {{ 'Two serves each' if event.serve_rule == 'two_serves' else 'Winner serves' }} · All matches</p>{% endif %}
 {% if live_fixture or next_fixture %}
 <section class="next-match" id="next-match">
 <div class="next-match-label">{{ 'Current match' if live_fixture else ('Deferred match' if next_is_skipped else 'Next match') }}</div>

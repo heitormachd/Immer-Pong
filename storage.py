@@ -29,12 +29,14 @@ class Store:
     LIVE_MATCH_FIELDS = (*TOURNAMENT_MATCH_FIELDS, 'target_points', 'point_log', 'status', 'revision')
     PREVIOUS_MATCH_FIELDS = (*LIVE_MATCH_FIELDS, 'elo1_before', 'elo2_before')
     BEST_OF_MATCH_FIELDS = (*PREVIOUS_MATCH_FIELDS, 'best_of')
-    MATCH_FIELDS = (*BEST_OF_MATCH_FIELDS, 'first_server')
+    FIRST_SERVER_MATCH_FIELDS = (*BEST_OF_MATCH_FIELDS, 'first_server')
+    MATCH_FIELDS = (*FIRST_SERVER_MATCH_FIELDS, 'serve_rule')
     LEGACY_TOURNAMENT_FIELDS = ('id', 'name', 'system', 'created_at', 'players', 'groups', 'classification', 'badge')
     PREVIOUS_TOURNAMENT_FIELDS = (*LEGACY_TOURNAMENT_FIELDS, 'format_version')
     SCORING_TOURNAMENT_FIELDS = (*PREVIOUS_TOURNAMENT_FIELDS, 'target_points', 'target_stage',
                                  'alternate_target', 'bo3_stage')
-    TOURNAMENT_FIELDS = (*SCORING_TOURNAMENT_FIELDS, 'skipped_fixtures')
+    SKIPPED_TOURNAMENT_FIELDS = (*SCORING_TOURNAMENT_FIELDS, 'skipped_fixtures')
+    TOURNAMENT_FIELDS = (*SKIPPED_TOURNAMENT_FIELDS, 'serve_rule')
 
     def __init__(self, directory):
         self.directory = Path(directory)
@@ -60,11 +62,12 @@ class Store:
                 legacy = name == 'matches.csv' and reader.fieldnames in (
                     list(self.LEGACY_MATCH_FIELDS), list(self.TOURNAMENT_MATCH_FIELDS),
                     list(self.LIVE_MATCH_FIELDS), list(self.PREVIOUS_MATCH_FIELDS),
-                    list(self.BEST_OF_MATCH_FIELDS))
+                    list(self.BEST_OF_MATCH_FIELDS), list(self.FIRST_SERVER_MATCH_FIELDS))
                 legacy_tournaments = (name == 'tournaments.csv'
                                       and reader.fieldnames in (list(self.LEGACY_TOURNAMENT_FIELDS),
                                                                 list(self.PREVIOUS_TOURNAMENT_FIELDS),
-                                                                list(self.SCORING_TOURNAMENT_FIELDS)))
+                                                                list(self.SCORING_TOURNAMENT_FIELDS),
+                                                                list(self.SKIPPED_TOURNAMENT_FIELDS)))
                 legacy_players = name == 'players.csv' and reader.fieldnames == ['id', 'name', 'active']
                 if reader.fieldnames != list(fields) and not legacy and not legacy_tournaments and not legacy_players:
                     raise ValueError(f'Unexpected columns in {name}')
@@ -90,6 +93,7 @@ class Store:
                             row.update(target_points='7', target_stage='all', alternate_target='11',
                                        bo3_stage='none')
                         row.setdefault('skipped_fixtures', '[]')
+                        row.setdefault('serve_rule', 'winner_serves')
                 return rows
         except FileNotFoundError:
             return []
@@ -111,6 +115,8 @@ class Store:
                 player['active'] = player['active'] == '1'
             tournament_ids = set()
             for tournament in tournaments:
+                if tournament['serve_rule'] not in ('winner_serves', 'two_serves'):
+                    raise ValueError('Invalid tournament serve rule')
                 tournament['players'] = json.loads(tournament['players'])
                 tournament['groups'] = int(tournament['groups'])
                 tournament['skipped_fixtures'] = json.loads(tournament['skipped_fixtures'])
@@ -151,6 +157,9 @@ class Store:
                 if match['player1'] not in ids or match['player2'] not in ids:
                     raise ValueError('Match references a missing player')
                 match.setdefault('first_server', match['player1'])
+                match.setdefault('serve_rule', 'winner_serves')
+                if match['serve_rule'] not in ('winner_serves', 'two_serves'):
+                    raise ValueError('Invalid serve rule')
                 match['best_of'] = int(match.get('best_of') or 1)
                 match['score1'] = int(match['score1'])
                 match['score2'] = int(match['score2'])
@@ -206,6 +215,7 @@ class Store:
             for row in rows:
                 row.setdefault('best_of', 1)
                 row.setdefault('first_server', row['player1'])
+                row.setdefault('serve_rule', 'winner_serves')
             rebuild_match_elos(rows)
         temporary = None
         try:
@@ -370,12 +380,14 @@ class Store:
 
     def create_tournament(self, name, system, participants, groups=1,
                           classification='minor', badge='cup', target_points=7, target_stage='all',
-                          alternate_target=11, bo3_stage='none'):
+                          alternate_target=11, bo3_stage='none', serve_rule='two_serves'):
         name = name.strip()
         if not name:
             raise StoreError('Enter a tournament name.')
         self._validate_tournament(system, participants, groups)
         self._validate_scoring(target_points, target_stage, alternate_target, bo3_stage)
+        if serve_rule not in ('winner_serves', 'two_serves'):
+            raise StoreError('Choose a valid serving rule.')
         if classification == 'minor':
             badge = ''
         self._validate_identity(classification, badge)
@@ -390,7 +402,7 @@ class Store:
                                     players=seeds, groups=groups, classification=classification, badge=badge,
                                     format_version=3, target_points=target_points, target_stage=target_stage,
                                     alternate_target=alternate_target, bo3_stage=bo3_stage,
-                                    skipped_fixtures=[]))
+                                    skipped_fixtures=[], serve_rule=serve_rule))
             self._write('tournaments.csv', self.TOURNAMENT_FIELDS, tournaments)
             return players, matches, tournaments
 
@@ -440,7 +452,8 @@ class Store:
                                 player1=fixture['player1'], player2=fixture['player2'],
                                 score1=score1, score2=score2,
                                 tournament_id=tournament_id, fixture_id=fixture_id,
-                                target_points=None, point_log=[], status='completed', revision=0))
+                                target_points=None, point_log=[], status='completed', revision=0,
+                                serve_rule=tournament['serve_rule']))
             # The result is the only persisted change. Brackets and completion are
             # derived from it, so a crash cannot leave two tables half-updated.
             self._write('matches.csv', self.MATCH_FIELDS, matches)
@@ -468,11 +481,14 @@ class Store:
                                 player1=fixture['player1'], player2=fixture['player2'], score1=0, score2=0,
                                 tournament_id=tournament_id, fixture_id=fixture_id,
                                 target_points=fixture['target_points'], best_of=fixture['best_of'],
-                                point_log=[], status='in_progress', revision=0, first_server=''))
+                                point_log=[], status='in_progress', revision=0, first_server='',
+                                serve_rule=tournament['serve_rule']))
             self._write('matches.csv', self.MATCH_FIELDS, matches)
             return players, matches, tournaments
 
-    def create_live_match(self, player1, player2, target_points, best_of=1):
+    def create_live_match(self, player1, player2, target_points, best_of=1, serve_rule='two_serves'):
+        if serve_rule not in ('winner_serves', 'two_serves'):
+            raise StoreError('Choose a valid serving rule.')
         if player1 == player2:
             raise StoreError('Choose two different players.')
         if type(target_points) is not int or target_points < 2:
@@ -486,7 +502,8 @@ class Store:
             matches.append(dict(id=uuid.uuid4().hex, timestamp=datetime.now(timezone.utc).isoformat(),
                                 player1=player1, player2=player2, score1=0, score2=0,
                                 tournament_id='', fixture_id='', target_points=target_points,
-                                point_log=[], status='in_progress', revision=0, first_server='', best_of=best_of))
+                                point_log=[], status='in_progress', revision=0, first_server='', best_of=best_of,
+                                serve_rule=serve_rule))
             self._write('matches.csv', self.MATCH_FIELDS, matches)
             return players, matches, tournaments
 

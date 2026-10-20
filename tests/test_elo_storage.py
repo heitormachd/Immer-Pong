@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from ranking import match_elo_history
+from ranking import database_stats, match_elo_history
 from storage import Store, StoreError
 
 
@@ -31,7 +31,7 @@ class EloStorageTests(unittest.TestCase):
 
     def test_all_legacy_schemas_backfill_preserve_and_do_not_repeat(self):
         for fields in (Store.LEGACY_MATCH_FIELDS, Store.TOURNAMENT_MATCH_FIELDS, Store.LIVE_MATCH_FIELDS,
-                       Store.PREVIOUS_MATCH_FIELDS, Store.BEST_OF_MATCH_FIELDS):
+                       Store.PREVIOUS_MATCH_FIELDS, Store.BEST_OF_MATCH_FIELDS, Store.FIRST_SERVER_MATCH_FIELDS):
             with self.subTest(fields=fields):
                 self.path.unlink(missing_ok=True)
                 rows = self.legacy(fields)
@@ -40,6 +40,7 @@ class EloStorageTests(unittest.TestCase):
                 self.assertEqual(backup.read_bytes(), before)
                 players, matches, _ = self.store.snapshot()
                 self.assertTrue(all(m['first_server'] == m['player1'] for m in matches))
+                self.assertTrue(all(m['serve_rule'] == 'winner_serves' for m in matches))
                 self.assertEqual((matches[0]['elo1_before'], matches[0]['elo2_before']), (1000, 1000))
                 self.assertEqual((matches[1]['elo1_before'], matches[1]['elo2_before']), (984, 1016))
                 with self.path.open(newline='') as handle:
@@ -51,6 +52,33 @@ class EloStorageTests(unittest.TestCase):
                 self.assertEqual(self.path.read_bytes(), after)
                 with patch('ranking._replay', side_effect=AssertionError('Must use saved Elo')):
                     self.assertEqual(match_elo_history(players, matches)[matches[1]['id']]['player1']['before'], 984)
+
+    def test_serve_rule_upgrade_preserves_completed_and_in_progress_matches(self):
+        for sequence in ((self.b, self.a, self.a, self.a), (self.b,)):
+            match = self.store.create_live_match(self.a, self.b, 3)[1][-1]
+            self.store.set_first_server(match['id'], self.b, 0)
+            for revision, player in enumerate(sequence, 1):
+                self.store.score_live_match(match['id'], player, revision)
+        with self.path.open(newline='') as handle:
+            rows = list(csv.DictReader(handle))
+        with self.path.open('w', newline='') as handle:
+            writer = csv.DictWriter(handle, Store.FIRST_SERVER_MATCH_FIELDS, extrasaction='ignore')
+            writer.writeheader()
+            writer.writerows(rows)
+        players, original, _ = self.store.snapshot()
+        stats = database_stats(players, original)
+        backup = self.store.migrate_elo()
+        self.assertIsNotNone(backup)
+        self.assertEqual(self.store.snapshot()[1], original)
+        self.assertEqual(database_stats(*self.store.snapshot()[:2]), stats)
+        self.store.create_live_match(self.a, self.b, 3)
+        matches = self.store.snapshot()[1]
+        self.assertEqual([m['serve_rule'] for m in matches],
+                         ['winner_serves', 'winner_serves', 'two_serves'])
+        self.assertEqual(database_stats(players, matches), stats)
+        ongoing = matches[1]
+        self.store.score_live_match(ongoing['id'], self.a, ongoing['revision'])
+        self.assertEqual(self.store.snapshot()[1][1]['serve_rule'], 'winner_serves')
 
     def test_deletion_rewrites_later_ratings(self):
         self.store.register(self.a, self.b, 7, 0)

@@ -243,6 +243,7 @@ class TournamentStorageTests(unittest.TestCase):
         match = self.store.create_live_tournament_match(
             tournament['id'], fixture['id'], None,
             (fixture['player1'], fixture['player2']))[1][-1]
+        self.assertEqual(match['serve_rule'], 'two_serves')
         self.store.set_first_server(match['id'], match['player1'], 0)
         for revision in range(1, 5):
             self.store.score_live_match(match['id'], match['player1'], revision)
@@ -254,9 +255,50 @@ class TournamentStorageTests(unittest.TestCase):
 
     def test_invalid_scoring_settings_rejected(self):
         for settings in ({'target_points': 1}, {'target_stage': 'bad'},
-                         {'alternate_target': 1}, {'bo3_stage': 'bad'}):
+                         {'alternate_target': 1}, {'bo3_stage': 'bad'}, {'serve_rule': 'bad'}):
             with self.assertRaises(StoreError):
                 self.store.create_tournament('Cup', 'single', self.ids[:2], **settings)
+
+    def test_all_rounds_inherit_saved_tournament_serving_rule(self):
+        for rule in ('winner_serves', 'two_serves'):
+            tournament = self.store.create_tournament(
+                'Cup', 'single', self.ids[:4], target_points=2,
+                target_stage='final', alternate_target=3, bo3_stage='final', serve_rule=rule)[2][-1]
+            tournament = self.store.snapshot()[2][-1]
+            self.assertEqual(tournament['serve_rule'], rule)
+            for fixture in ready(tournament_state(tournament, [])):
+                self.save(tournament, fixture)
+                self.assertEqual(self.store.snapshot()[1][-1]['serve_rule'], rule)
+            fixture = ready(tournament_state(tournament, self.store.snapshot()[1]))[0]
+            match = self.store.create_live_tournament_match(
+                tournament['id'], fixture['id'], None,
+                (fixture['player1'], fixture['player2']))[1][-1]
+            self.assertEqual((match['serve_rule'], match['target_points'], match['best_of']), (rule, 3, 3))
+            self.store.delete_match(match['id'])
+
+    def test_legacy_tournament_rules_upgrade_without_changing_matches(self):
+        tournament = self.store.create_tournament('Old cup', 'single', self.ids[:4],
+                                                  serve_rule='winner_serves')[2][-1]
+        self.save(tournament, ready(tournament_state(tournament, []))[0])
+        path = Path(self.temp.name) / 'tournaments.csv'
+        with path.open(newline='') as handle:
+            rows = list(csv.DictReader(handle))
+        original_matches = (Path(self.temp.name) / 'matches.csv').read_bytes()
+        for fields in (Store.LEGACY_TOURNAMENT_FIELDS, Store.PREVIOUS_TOURNAMENT_FIELDS,
+                       Store.SCORING_TOURNAMENT_FIELDS, Store.SKIPPED_TOURNAMENT_FIELDS):
+            with self.subTest(fields=fields):
+                with path.open('w', newline='') as handle:
+                    writer = csv.DictWriter(handle, fieldnames=fields, extrasaction='ignore')
+                    writer.writeheader()
+                    writer.writerows(rows)
+                before = path.read_bytes()
+                loaded = self.store.snapshot()[2][0]
+                self.assertEqual(loaded['serve_rule'], 'winner_serves')
+                self.assertEqual(path.read_bytes(), before)
+                self.create()
+                old, new = self.store.snapshot()[2]
+                self.assertEqual((old['serve_rule'], new['serve_rule']), ('winner_serves', 'two_serves'))
+                self.assertEqual((Path(self.temp.name) / 'matches.csv').read_bytes(), original_matches)
 
     def test_previous_tournament_schema_uses_default_scoring(self):
         tournament = self.create()

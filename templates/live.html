@@ -7,13 +7,25 @@
 {% endif %}
 <h2>{{ names[match.player1] }} vs {{ names[match.player2] }}</h2>
 <p>{{ 'Completed' if state.winner else 'In progress' }}</p>
-{% if match.first_server %}<p>First server: {{ names[match.first_server] }}</p>{% endif %}
 {% macro player_estimate(player, side) %}
 {% set estimate = estimates[player] if estimates else none %}
 <div class="match-estimate player-{{ side }}">
 <div class="player-identity"><strong>{{ names[player] }}</strong>
 {% if estimate %}<span class="muted number">Elo {{ '%.2f'|format(estimate.elo) }}</span>{% endif %}
-<img class="live-avatar" src="{{ avatar_url(avatars[player]) }}" alt=""></div>
+<img class="live-avatar" src="{{ avatar_url(avatars[player]) }}" alt="">
+<div class="serve-indicators" role="status">
+{% if state.server == player %}
+<span class="serve-badge" aria-label="{{ names[player] }} to serve">
+<span class="serve-label">To serve</span>
+{% if match.serve_rule == 'two_serves' %}
+{% set turn = match.point_log|length % 2 + 1 %}
+<span class="serve-turn" aria-label="Serve {{ turn }} of 2" title="{{ 'First serve · one more before switching' if turn == 1 else 'Second serve · switch after this point' }}">
+{% for slot in (1, 2) %}<span class="serve-slot {{ 'is-current' if slot == turn else ('is-used' if slot < turn else 'is-upcoming') }}" aria-hidden="true"></span>{% endfor %}
+</span>
+{% endif %}
+</span>
+{% endif %}
+</div></div>
 {% if estimate %}<div class="player-projection">
 <strong class="win-probability">{{ '%.1f'|format(estimate.probability * 100) }}%</strong>
 <span class="muted">Win probability</span>
@@ -27,6 +39,7 @@
 {% if state.best_of == 3 %}<span>Best of 3 · Games {{ state.games[0] }} – {{ state.games[1] }}</span>{% endif %}
 <span>First to {{ 2 if state.overtime_round else match.target_points }} points wins</span>
 <strong>{% if state.overtime_round %}{{ state.overtime_score[0] }}<sub aria-label="Player 1 accumulated points">{{ state.game_score[0] }}</sub> – {{ state.overtime_score[1] }}<sub aria-label="Player 2 accumulated points">{{ state.game_score[1] }}</sub>{% else %}{{ state.game_score[0] }} – {{ state.game_score[1] }}{% endif %}</strong>
+{% if not match.first_server %}<span class="serve-prompt">Choose first server below</span>{% endif %}
 </div>
 {{ player_estimate(match.player2, 2) }}
 </div>
@@ -47,7 +60,7 @@
 <form method="post" action="{{ scoring_url }}" data-confirm="Delete this live match and all its points? Any completed result will also be removed.">{{ csrf() }}{{ hidden('action', 'delete') }}<button>Delete live match…</button></form>
 </div>
 <h2>Point history</h2>
-<div class="table-scroll"><table><thead><tr><th>Game</th><th>Point</th><th>Scorer</th><th>Type</th><th>Time</th><th>Cumulative score</th><th>Overtime</th></tr></thead><tbody>
-{% for point in state.history %}<tr><td>{{ point.game }}</td><td>{{ point.number }}</td><td>{{ names[point.player] }}</td><td>{{ 'ACE!' if point.ace else '—' }}</td><td>{{ time(point.timestamp) }}</td><td>{{ point.score1 }} – {{ point.score2 }}</td><td>{% if point.overtime_round %}Round {{ point.overtime_round }} · {{ 'Split → reset' if point.reset else '%s – %s'|format(point.overtime_score[0], point.overtime_score[1]) }}{% else %}—{% endif %}</td></tr>
-{% else %}<tr><td colspan="7" class="empty">No points yet.</td></tr>{% endfor %}</tbody></table></div>
+<div class="table-scroll"><table><thead><tr><th>Game</th><th>Point</th><th>Server</th><th>Scorer</th><th>Type</th><th>Time</th><th>Cumulative score</th><th>Overtime</th></tr></thead><tbody>
+{% for point in state.history %}<tr><td>{{ point.game }}</td><td>{{ point.number }}</td><td>{{ names[point.server] }}</td><td>{{ names[point.player] }}</td><td>{{ 'ACE!' if point.ace else '—' }}</td><td>{{ time(point.timestamp) }}</td><td>{{ point.score1 }} – {{ point.score2 }}</td><td>{% if point.overtime_round %}Round {{ point.overtime_round }} · {{ 'Split → reset' if point.reset else '%s – %s'|format(point.overtime_score[0], point.overtime_score[1]) }}{% else %}—{% endif %}</td></tr>
+{% else %}<tr><td colspan="8" class="empty">No points yet.</td></tr>{% endfor %}</tbody></table></div>
 {% endblock %}

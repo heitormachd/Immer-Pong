@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from live_scoring import live_state
+from live_scoring import individual_matches, live_state
 from ranking import standings
 from storage import Store, StoreError
 
@@ -34,6 +34,35 @@ def concurrent_point(directory, match_id, player, queue):
 
 
 class LiveRulesTests(unittest.TestCase):
+    def test_two_serves_ignore_scorer_and_undo_restores_turn(self):
+        for first, expected in (('A', 'AABBAAB'), ('B', 'BBAABBA')):
+            match = raw_match('BBABAA', target=7)
+            match.update(first_server=first, serve_rule='two_serves')
+            for length in range(6, -1, -1):
+                match['point_log'] = match['point_log'][:length]
+                state = live_state(match)
+                self.assertEqual(state['server'], expected[length])
+                self.assertEqual(''.join(p['server'] for p in state['history']), expected[:length])
+
+    def test_two_serves_continue_through_overtime_resets(self):
+        match = raw_match('ABABAB', target=2)
+        match.update(first_server='B', serve_rule='two_serves')
+        state = live_state(match)
+        self.assertEqual(state['overtime_round'], 3)
+        self.assertEqual(''.join(p['server'] for p in state['history']), 'BBAABB')
+        self.assertEqual(state['server'], 'A')
+
+    def test_bo3_game_stats_preserve_serving_turns_across_odd_boundaries(self):
+        for rule, expected in (('two_serves', 'BBAABBAAB'), ('winner_serves', 'BAAABBBAA')):
+            match = raw_match('AAABBBAAA', target=3)
+            match.update(id='series', first_server='B', serve_rule=rule, best_of=3)
+            state = live_state(match)
+            games = individual_matches([match])
+            replayed = [p for game in games for p in live_state(game)['history']]
+            self.assertEqual(''.join(p['server'] for p in state['history']), expected)
+            self.assertEqual([p['server'] for p in replayed], [p['server'] for p in state['history']])
+            self.assertIsNone(state['server'])
+
     def test_best_of_three_resets_games_and_undo_reopens_decider(self):
         match = raw_match('A' * 7 + 'B' * 7 + 'A' * 7)
         match['best_of'] = 3
@@ -106,6 +135,7 @@ class LiveStorageTests(unittest.TestCase):
 
     def test_resume_log_and_completion_order(self):
         match = self.create(2)
+        self.assertEqual(match['serve_rule'], 'two_serves')
         self.store.register(self.a, self.b, 11, 5)
         match = self.point(match, self.b)
         players, matches, _ = Store(self.temp.name).snapshot()

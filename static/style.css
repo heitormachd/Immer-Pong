@@ -164,6 +164,16 @@ img.player-avatar { object-fit: cover; padding: 0; vertical-align: middle; }
 .player-1 .player-identity > strong { color: #6a9dcc; }
 .player-2 .player-identity > strong { color: #c77d7d; }
 .live-avatar { width: 128px; max-width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; }
+.match-estimate.player-1 { --serve-color: #6a9dcc; }
+.match-estimate.player-2 { --serve-color: #c77d7d; }
+.serve-indicators { display: flex; flex-direction: column; align-items: center; min-height: 40px; padding-top: 4px; }
+.serve-badge { display: inline-grid; width: 96px; max-width: 100%; padding: 6px 8px; border: 1px solid #666666; background: #383838; white-space: nowrap; }
+.serve-label { font-size: 12px; font-weight: 600; }
+.serve-turn { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 6px; }
+.serve-slot { height: 3px; background: #555555; }
+.serve-slot.is-current { background: var(--serve-color); }
+.serve-slot.is-used { background: var(--serve-color); opacity: .35; }
+.scoreboard .serve-prompt { font-size: 11px; }
 @media (max-width: 650px) {
   .match-score-layout { grid-template-columns: minmax(0, 1fr) minmax(110px, 1.2fr) minmax(0, 1fr); gap: 8px; }
   .match-estimate { display: flex; }
