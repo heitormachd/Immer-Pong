@@ -44,7 +44,7 @@
 <thead><tr><th>Time</th><th>Player 1</th><th>P1 Elo</th><th>Points</th><th>Player 2</th><th>P2 Elo</th><th>Tournament</th><th>Actions</th></tr></thead>
 <tbody>{% for m in history|reverse if m.status == 'completed' %}
 <tr><td>{{ time(m.timestamp) }}</td><td>{{ names[m.player1] }}</td><td class="number">{{ elo_cell(elo[m.id].player1) }}</td><td class="number">{{ m.score1 }} – {{ m.score2 }}</td><td>{{ names[m.player2] }}</td><td class="number">{{ elo_cell(elo[m.id].player2) }}</td><td>{{ tournament_names.get(m.tournament_id, '—') }}</td>
-<td><div class="actions">{% if m.target_points %}<a href="{{ url_for('live', match_id=m.get('series_id', m.id)) }}">Review match{{ ' · Game ' ~ m.game if m.series_id else '' }}</a>{% endif %}
+<td><div class="actions"><a href="{{ url_for('live', match_id=m.get('series_id', m.id)) }}">Review match{{ ' · Game ' ~ m.game if m.series_id else '' }}</a>
 {% if loop.first %}<form method="post">{{ csrf() }}{{ hidden('action', 'create_live') }}{{ hidden('player1', m.player1) }}{{ hidden('player2', m.player2) }}{{ hidden('target', '7') }}{{ hidden('serve_rule', m.serve_rule) }}<button>Rematch</button></form>{% endif %}</div></td></tr>
 {% else %}<tr><td colspan="8" class="empty">No completed matches yet.</td></tr>{% endfor %}</tbody>
 </table></div>

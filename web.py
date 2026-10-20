@@ -255,12 +255,16 @@ def create_app(data_directory=None, url_prefix=""):
                 abort(400)
             return redirect(url_for('watch_matches') if watching else url_for('live', match_id=match_id), 303)
         data = context()
-        match = next((m for m in data['matches'] if m['id'] == match_id and m['target_points']), None)
+        match = next((m for m in data['matches'] if m['id'] == match_id), None)
         if match is None:
             abort(404, 'Live match not found. It may have been deleted.')
         estimates = (match_elo_estimates(data['players'], data['matches'], match)
                      if match['status'] == 'in_progress' else None)
-        return render('live.html', 'matches', **data, match=match, state=live_state(match),
+        state = (live_state(match) if match['target_points'] else
+                 dict(winner=match['player1'] if match['score1'] > match['score2'] else match['player2'],
+                      game_score=(match['score1'], match['score2']), best_of=1,
+                      overtime_round=0, server=None))
+        return render('live.html', 'matches', **data, match=match, state=state,
                       estimates=estimates)
 
     @app.route('/tournaments', methods=['GET', 'POST'])

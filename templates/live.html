@@ -37,14 +37,15 @@
 {{ player_estimate(match.player1, 1) }}
 <div class="scoreboard">
 {% if state.best_of == 3 %}<span>Best of 3 · Games {{ state.games[0] }} – {{ state.games[1] }}</span>{% endif %}
-<span>First to {{ 2 if state.overtime_round else match.target_points }} points wins</span>
+{% if match.target_points %}<span>First to {{ 2 if state.overtime_round else match.target_points }} points wins</span>{% endif %}
 <strong>{% if state.overtime_round %}{{ state.overtime_score[0] }}<sub aria-label="Player 1 accumulated points">{{ state.game_score[0] }}</sub> – {{ state.overtime_score[1] }}<sub aria-label="Player 2 accumulated points">{{ state.game_score[1] }}</sub>{% else %}{{ state.game_score[0] }} – {{ state.game_score[1] }}{% endif %}</strong>
-{% if not match.first_server %}<span class="serve-prompt">Choose first server below</span>{% endif %}
+{% if match.target_points and not match.first_server %}<span class="serve-prompt">Choose first server below</span>{% endif %}
 </div>
 {{ player_estimate(match.player2, 2) }}
 </div>
 {% if state.winner %}<p class="winner">Winner: {{ names[state.winner] }}</p>{% endif %}
 {% set scoring_url = url_for('live', match_id=match.id, watch='1') if watching else url_for('live', match_id=match.id) %}
+{% if match.target_points %}
 <div class="row scoring">
 {% if not match.first_server %}
 {% for player in [match.player1, match.player2] %}
@@ -54,13 +55,18 @@
 {% for player in [match.player1, match.player2] %}<div class="scoring-player"><form method="post" action="{{ scoring_url }}">{{ csrf() }}{{ hidden('action', 'point') }}{{ hidden('player_id', player) }}{{ hidden('revision', match.revision) }}<button class="player-{{ loop.index }}" {% if state.winner %}disabled{% endif %}>{{ names[player] }} +1 point</button></form><form method="post" action="{{ scoring_url }}">{{ csrf() }}{{ hidden('action', 'point') }}{{ hidden('player_id', player) }}{{ hidden('revision', match.revision) }}{{ hidden('ace', '1') }}<button class="ace-button player-{{ loop.index }}" aria-label="Ace for {{ names[player] }}" {% if state.winner %}disabled{% endif %}>ACE!</button></form></div>{% endfor %}
 {% endif %}
 </div>
+{% endif %}
 
 <div class="row">
+{% if match.target_points %}
 <form method="post" action="{{ scoring_url }}" {% if state.winner %}data-confirm="Undo the winning point? This reopens the match and removes its result from the leaderboard."{% endif %}>{{ csrf() }}{{ hidden('action', 'undo') }}{{ hidden('revision', match.revision) }}<button {% if not match.point_log and not match.first_server %}disabled{% endif %}>{{ 'Undo last point' if match.point_log or not match.first_server else 'Undo server selection' }}{{ '…' if state.winner else '' }}</button></form>
+{% endif %}
 <form method="post" action="{{ scoring_url }}" data-confirm="Delete this live match and all its points? Any completed result will also be removed.">{{ csrf() }}{{ hidden('action', 'delete') }}<button>Delete live match…</button></form>
 </div>
+{% if match.target_points %}
 <h2>Point history</h2>
 <div class="table-scroll"><table><thead><tr><th>Game</th><th>Point</th><th>Server</th><th>Scorer</th><th>Type</th><th>Time</th><th>Cumulative score</th><th>Overtime</th></tr></thead><tbody>
 {% for point in state.history %}<tr><td>{{ point.game }}</td><td>{{ point.number }}</td><td>{{ names[point.server] }}</td><td>{{ names[point.player] }}</td><td>{{ 'ACE!' if point.ace else '—' }}</td><td>{{ time(point.timestamp) }}</td><td>{{ point.score1 }} – {{ point.score2 }}</td><td>{% if point.overtime_round %}Round {{ point.overtime_round }} · {{ 'Split → reset' if point.reset else '%s – %s'|format(point.overtime_score[0], point.overtime_score[1]) }}{% else %}—{% endif %}</td></tr>
 {% else %}<tr><td colspan="8" class="empty">No points yet.</td></tr>{% endfor %}</tbody></table></div>
+{% endif %}
 {% endblock %}

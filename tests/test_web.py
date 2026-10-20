@@ -193,6 +193,39 @@ class WebTests(unittest.TestCase):
                                    target=7, serve_rule='unknown').status_code, 409)
         self.assertEqual(self.ledger(), before)
 
+    def test_final_result_review_shows_saved_scores_without_point_history(self):
+        a, b = self.ids[:2]
+        self.store.register(a, b, 7, 4, games=[(7, 4), (3, 7), (8, 6)])
+        for match in self.store.snapshot()[1]:
+            with self.subTest(match=match['id']):
+                path = '/live/' + match['id']
+                self.assertIn(f'href="{path}">Review match</a>', self.client.get('/').text)
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(f"<strong>{match['score1']} – {match['score2']}</strong>", response.text)
+                winner = 'Alice' if match['score1'] > match['score2'] else 'Bob'
+                self.assertIn(f'Winner: {winner}', response.text)
+                self.assertIn('Completed', response.text)
+                self.assertIn('Delete live match…', response.text)
+                for absent in ('Point history', 'First to', 'to serve', '+1 point', 'Undo'):
+                    self.assertNotIn(absent, response.text)
+                self.assertEqual(self.post(path, action='delete').status_code, 303)
+                self.assertEqual(self.client.get(path).status_code, 404)
+        self.assertEqual(self.store.snapshot()[1], [])
+
+    def test_live_review_keeps_point_history(self):
+        a, b = self.ids[:2]
+        match = self.store.create_live_match(a, b, 2)[1][-1]
+        path = '/live/' + match['id']
+        self.assertIn('Point history', self.client.get(path).text)
+        self.store.set_first_server(match['id'], a, 0)
+        for revision in (1, 2):
+            self.store.score_live_match(match['id'], a, revision)
+        page = self.client.get(path).text
+        self.assertIn('Winner: Alice', page)
+        self.assertIn('Point history', page)
+        self.assertIn('Undo last point', page)
+
     def test_bo3_final_results_register_each_game_atomically(self):
         a, b = self.ids[:2]
         response = self.post('/', action='register', player1=a, player2=b, bo3='1',
