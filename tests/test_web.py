@@ -520,12 +520,45 @@ class WebTests(unittest.TestCase):
         self.assertNotIn('-14.53', page)
         self.assertNotIn('-17.47', page)
         self.post(path, action='point', player_id=a, revision=1)
-        self.assertIn('54.6%', self.client.get(path).text)
+        before = self.ledger()
+        for view in (path, '/watch'):
+            page = self.client.get(view).text
+            for value in ('78.3%', '21.7%', 'Elo 1016.00', '+14.53 Elo if win'):
+                self.assertIn(value, page)
+        self.assertEqual(before, self.ledger())
         self.post(path, action='point', player_id=a, revision=2)
         self.assertNotIn('Win probability', self.client.get(path).text)
         self.assertIn('(+14.53)', self.client.get('/').text)
         self.post(path, action='undo', revision=3)
+        self.assertIn('78.3%', self.client.get(path).text)
+        self.post(path, action='undo', revision=4)
         self.assertIn('54.6%', self.client.get(path).text)
+
+    def test_live_bo3_probability_tracks_game_wins_and_undo(self):
+        a, b = self.ids[:2]
+        match = self.store.create_live_match(a, b, 2, best_of=3)[1][-1]
+        path = '/live/' + match['id']
+        self.post(path, action='first_server', player_id=a, revision=0)
+        self.assertEqual(self.client.get(path).text.count('50.0%'), 2)
+        self.post(path, action='point', player_id=a, revision=1)
+        for view in (path, '/watch'):
+            page = self.client.get(view).text
+            self.assertIn('62.5%', page)
+            self.assertIn('37.5%', page)
+            self.assertEqual(page.count('+16.00 Elo if win'), 2)
+        self.post(path, action='point', player_id=a, revision=2)
+        for view in (path, '/watch'):
+            page = self.client.get(view).text
+            self.assertIn('Games 1 – 0', page)
+            self.assertIn('79.4%', page)
+            self.assertIn('Elo 1016.00', page)
+            self.assertIn('+14.53 Elo if win', page)
+        self.post(path, action='undo', revision=3)
+        for view in (path, '/watch'):
+            page = self.client.get(view).text
+            self.assertIn('Games 0 – 0', page)
+            self.assertIn('62.5%', page)
+            self.assertEqual(page.count('Elo 1000.00'), 2)
 
     def test_live_scoring_overtime_stale_submission_finish_and_undo(self):
         a, b = self.ids[:2]

@@ -14,11 +14,62 @@ def elo_change(elo1, elo2, won):
     return 32 * (int(won) - elo_win_probability(elo1, elo2))
 
 
+def _game_win_probability(target, point_probability, scores=(0, 0)):
+    """Chance of winning a game from a regulation score, including overtime."""
+    p = point_probability
+    overtime = p * p / (p * p + (1 - p) ** 2)
+    probabilities = [[0.0] * (target + 1) for _ in range(target + 1)]
+    for b in range(target):
+        probabilities[target][b] = 1.0
+    for a in range(target - 1, scores[0] - 1, -1):
+        for b in range(target - 1, scores[1] - 1, -1):
+            probabilities[a][b] = (overtime if a == b == target - 1 else
+                                    p * probabilities[a + 1][b]
+                                    + (1 - p) * probabilities[a][b + 1])
+    return probabilities[scores[0]][scores[1]]
+
+
+def live_win_probability(match, game_probability):
+    """Player one's match odds, using Elo game odds and the replayed live score."""
+    state = live_state(match)
+    if state['winner'] is not None:
+        return float(state['winner'] == match['player1'])
+    target = match['target_points']
+    # Elo predicts a whole game, not an individual point. Infer a point rate
+    # that reproduces the Elo probability at 0–0 for this target.
+    low, high = 0.0, 1.0
+    for _ in range(40):
+        p = (low + high) / 2
+        if _game_win_probability(target, p) < game_probability:
+            low = p
+        else:
+            high = p
+    p = (low + high) / 2
+    if state['overtime_round']:
+        # A split two-point round returns to the same starting probability.
+        current = p * p / (p * p + (1 - p) ** 2)
+        if state['overtime_score'][0] == 1:
+            current = p + (1 - p) * current
+        elif state['overtime_score'][1] == 1:
+            current = p * current
+    else:
+        current = _game_win_probability(target, p, state['game_score'])
+    if state['best_of'] == 1 or state['games'] == (1, 1):
+        return current
+    if state['games'] == (1, 0):
+        return current + (1 - current) * game_probability
+    if state['games'] == (0, 1):
+        return current * game_probability
+    return (current * (1 - (1 - game_probability) ** 2)
+            + (1 - current) * game_probability ** 2)
+
+
 def match_elo_estimates(players, matches, match):
     stats, _ = _replay(players, matches)
     a, b = match['player1'], match['player2']
+    probability = live_win_probability(match, elo_win_probability(stats[a]['elo'], stats[b]['elo']))
     return {player: dict(elo=stats[player]['elo'],
-                         probability=elo_win_probability(stats[player]['elo'], stats[opponent]['elo']),
+                         probability=probability if player == a else 1 - probability,
                          win=elo_change(stats[player]['elo'], stats[opponent]['elo'], True),
                          loss=elo_change(stats[player]['elo'], stats[opponent]['elo'], False))
             for player, opponent in ((a, b), (b, a))}

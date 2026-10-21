@@ -295,6 +295,10 @@ appear automatically.” Creating a new live match displays it without navigatin
 away or manually refreshing. If another match is still active, it is shown instead
 of the waiting message.
 
+**Win probability** combines current Elo with the score and match format,
+updating after each point and undo. Elo rules remain unchanged.
+See [the calculation](#dynamic-win-probability-calculation).
+
 At a tie one point below the target (for example, **6–6 when playing to 7**),
 overtime begins. Each overtime round contains two points:
 
@@ -326,6 +330,37 @@ an abandoned or mistaken match and its point log.
 for every recorded point. It is available in Live scoring and for completed
 matches in the history table. Final-result-only matches have no point sequence.
 Player Stats includes a Clutch score computed from complete point histories.
+
+## Dynamic win probability calculation
+
+In `ranking.py`, $`q`$ is A's game probability from current Elo ratings,
+$`p`$ is A's point probability, and $`W(a,b)`$ is A's game probability at score
+$`a`$–$`b`$:
+
+```math
+q = \frac{1}{1 + 10^{(R_B-R_A)/400}}, \qquad
+W(a,b) = pW(a+1,b) + (1-p)W(a,b+1)
+```
+
+Winning and losing states have values 1 and 0. At $`(T-1,T-1)`$ for target $`T`$,
+use overtime probability $`D=p^2/[p^2+(1-p)^2]`$. Find $`p`$ by bisection so
+$`W(0,0)=q`$, preserving the starting single-game prediction.
+
+In overtime, a 1–0 lead gives $`p+(1-p)D`$; trailing 0–1 gives $`pD`$.
+A split round resets to $`D`$.
+
+Let $`w`$ be the current game's win probability. Bo1 displays $`w`$; Bo3 uses:
+
+| Games won A–B | A's series probability |
+|---|---|
+| 0–0 | $`w[1-(1-q)^2]+(1-w)q^2`$ |
+| 1–0 | $`w+(1-w)q`$ |
+| 0–1 | $`wq`$ |
+| 1–1 | $`w`$ |
+
+B's probability is the complement. Each forecast assumes independent points and
+future games with fixed probabilities; serving and streaks are ignored. Elo is
+read again on refresh, including completed games within an ongoing Bo3 series.
 
 ## Tournaments
 

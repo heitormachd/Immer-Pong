@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from live_scoring import individual_matches, live_state
-from ranking import standings
+from ranking import live_win_probability, standings
 from storage import Store, StoreError
 
 
@@ -114,6 +114,63 @@ class LiveRulesTests(unittest.TestCase):
             self.assertEqual(state['winner'], 'A')
             self.assertEqual(state['overtime_round'], 31)
             self.assertEqual(len(state['history']), len(sequence))
+
+
+class LiveProbabilityTests(unittest.TestCase):
+    def test_single_game_starts_at_elo_probability_for_each_target(self):
+        for target in (2, 7, 11, 21):
+            for probability in (0.01, 0.3, 0.5, 0.7, 0.99):
+                with self.subTest(target=target, probability=probability):
+                    self.assertAlmostEqual(live_win_probability(raw_match('', target), probability),
+                                           probability)
+
+    def test_equal_players_gain_and_lose_probability_with_the_score(self):
+        for points, expected in (('A', 0.61279296875), ('B', 0.38720703125),
+                                 ('AAAB', 0.74609375), ('ABBB', 0.25390625),
+                                 ('A' * 6 + 'B' * 4, 0.875)):
+            with self.subTest(points=points):
+                self.assertAlmostEqual(live_win_probability(raw_match(points), 0.5), expected)
+
+    def test_overtime_uses_the_current_round_and_undo_restores_probability(self):
+        # With a 60% point rate, a game to two starts at 9/13. A round
+        # favoring A is worth 57/65; one favoring B is worth 27/65.
+        for suffix, expected in (('', 9/13), ('A', 57/65), ('B', 27/65),
+                                 ('AB', 9/13), ('BA', 9/13), ('ABBA', 9/13),
+                                 ('AB' * 30, 9/13)):
+            with self.subTest(suffix=suffix):
+                match = raw_match('AB' + suffix, target=2)
+                self.assertAlmostEqual(live_win_probability(match, 9/13), expected)
+        match = raw_match('ABAA', target=2)
+        self.assertEqual(live_win_probability(match, 9/13), 1)
+        match['point_log'].pop()
+        self.assertAlmostEqual(live_win_probability(match, 9/13), 57/65)
+        match['point_log'].pop()
+        self.assertAlmostEqual(live_win_probability(match, 9/13), 9/13)
+
+    def test_completed_matches_are_certain_for_either_player(self):
+        for points, expected in (('AA', 1), ('BB', 0), ('ABAA', 1), ('ABBB', 0)):
+            with self.subTest(points=points):
+                self.assertEqual(live_win_probability(raw_match(points, target=2), 0.7), expected)
+
+    def test_best_of_three_combines_game_wins_and_current_score(self):
+        for points, probability, expected in (
+                ('', 0.7, 0.784), ('AA', 0.7, 0.91), ('BB', 0.7, 0.49),
+                ('AABB', 0.7, 0.7), ('AABBA', 0.5, 0.75),
+                ('AAA', 0.5, 0.875), ('BBA', 0.5, 0.375),
+                ('AAAA', 0.7, 1), ('BBBB', 0.7, 0)):
+            with self.subTest(points=points, probability=probability):
+                match = dict(raw_match(points, target=2), best_of=3)
+                self.assertAlmostEqual(live_win_probability(match, probability), expected)
+
+    def test_player_swap_and_serve_rules_preserve_symmetry(self):
+        for rule in ('winner_serves', 'two_serves'):
+            for points in ('AAB', 'AB' * 6 + 'A'):
+                match = dict(raw_match(points), serve_rule=rule, first_server='B')
+                swapped = dict(match, player1='B', player2='A')
+                probability = live_win_probability(match, 0.7)
+                self.assertGreater(probability, 0)
+                self.assertLess(probability, 1)
+                self.assertAlmostEqual(probability + live_win_probability(swapped, 0.3), 1)
 
 
 class LiveStorageTests(unittest.TestCase):
